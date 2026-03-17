@@ -110,14 +110,62 @@ Templates use Jinja2-like syntax. Key features:
 {% set var = expr %}                       — set variable
 ```
 
+### Whitespace control (IMPORTANT)
+
+Tera block tags (`{% %}`) render as blank lines in the output. Use `{%-` and `-%}` to
+trim surrounding whitespace. This is critical for clean output.
+
+**Rules:**
+- `{%-` trims whitespace BEFORE the tag (eats the preceding newline)
+- `-%}` trims whitespace AFTER the tag (eats the following newline)
+- Use BOTH (`{%- ... -%}`) on control-flow-only lines (for/endfor/if/endif/set)
+- Do NOT use `-%}` when the line also has output content after the tag
+
+**Examples:**
+
+```
+{# BAD — leaves blank lines between fields #}
+{% for field in fields %}
+    pub {{ field.name }}: {{ field.mapped_type }},
+{% endfor %}
+
+{# GOOD — no blank lines #}
+{%- for field in fields %}
+    pub {{ field.name }}: {{ field.mapped_type }},
+{%- endfor %}
+```
+
+```
+{# BAD — blank lines around conditional #}
+{% if tenant_scoped %}
+    pub tenant_id: String,
+{% endif %}
+
+{# GOOD — tight output #}
+{%- if tenant_scoped %}
+    pub tenant_id: String,
+{%- endif %}
+```
+
+**Pattern for struct fields with nullable check:**
+```
+{%- for field in fields %}
+{%- if field.nullable %}
+    pub {{ field.name }}: Option<{{ field.mapped_type }}>,
+{%- else %}
+    pub {{ field.name }}: {{ field.mapped_type }},
+{%- endif %}
+{%- endfor %}
+```
+
 ### Shared variables via `_vars.tera`
 
 Create `_vars.tera` in the generator directory. Its content is automatically prepended
-to all other templates:
+to all other templates. Use `{%- -%}` to avoid blank lines at the top of output:
 
 ```
-{% set entity_name = module_name | singularize %}
-{% set EntityName = entity_name | pascal_case %}
+{%- set entity_name = module_name | singularize -%}
+{%- set EntityName = entity_name | pascal_case -%}
 ```
 
 ### AI customization markers
