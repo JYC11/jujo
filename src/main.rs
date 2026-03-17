@@ -1,3 +1,4 @@
+mod commands;
 mod config;
 mod context;
 mod discovery;
@@ -99,10 +100,24 @@ fn run(cli: Cli) -> Result<()> {
             dry_run,
             json,
         } => cmd_generate(&name, &vars, force, skip_existing, dry_run, json),
-        Commands::List { .. } => bail!("not yet implemented: list"),
-        Commands::Describe { .. } => bail!("not yet implemented: describe"),
-        Commands::Validate => bail!("not yet implemented: validate"),
-        Commands::Init { .. } => bail!("not yet implemented: init"),
+        Commands::List { json } => {
+            let cwd = std::env::current_dir()?;
+            let root = discovery::find_jujo_root(&cwd)?;
+            commands::list::run(&root, json)
+        }
+        Commands::Describe { name, json } => {
+            let cwd = std::env::current_dir()?;
+            let root = discovery::find_jujo_root(&cwd)?;
+            commands::describe::run(&root, &name, json)
+        }
+        Commands::Validate => {
+            let cwd = std::env::current_dir()?;
+            let root = discovery::find_jujo_root(&cwd)?;
+            commands::validate::run(&root)
+        }
+        Commands::Init { lang } => {
+            commands::init::run(lang.as_deref())
+        }
     }
 }
 

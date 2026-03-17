@@ -546,3 +546,253 @@ fn dry_run_json_output() {
     // No files written.
     assert!(!dir.path().join("src/orders/mod.rs").exists());
 }
+
+// --- Phase 4: Discovery commands ---
+
+#[test]
+fn init_creates_jujo_dir() {
+    let dir = TempDir::new().unwrap();
+
+    let mut cmd = Command::cargo_bin("jujo").unwrap();
+    cmd.current_dir(dir.path())
+        .env("NO_COLOR", "1")
+        .args(["init", "--lang", "rust"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Initialized .jujo/"))
+        .stdout(predicate::str::contains("rust"));
+
+    assert!(dir.path().join(".jujo/config.toml").exists());
+    assert!(dir.path().join(".jujo/templates/example/generator.toml").exists());
+
+    // Config has Rust type map.
+    let config = std::fs::read_to_string(dir.path().join(".jujo/config.toml")).unwrap();
+    assert!(config.contains("string = \"String\""));
+    assert!(config.contains("int = \"i64\""));
+}
+
+#[test]
+fn init_go_language() {
+    let dir = TempDir::new().unwrap();
+
+    let mut cmd = Command::cargo_bin("jujo").unwrap();
+    cmd.current_dir(dir.path())
+        .env("NO_COLOR", "1")
+        .args(["init", "--lang", "go"])
+        .assert()
+        .success();
+
+    let config = std::fs::read_to_string(dir.path().join(".jujo/config.toml")).unwrap();
+    assert!(config.contains("string = \"string\""));
+    assert!(config.contains("int = \"int64\""));
+}
+
+#[test]
+fn init_already_exists() {
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".jujo")).unwrap();
+
+    let mut cmd = Command::cargo_bin("jujo").unwrap();
+    cmd.current_dir(dir.path())
+        .env("NO_COLOR", "1")
+        .args(["init", "--lang", "rust"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("already exists"));
+}
+
+#[test]
+fn init_unknown_language() {
+    let dir = TempDir::new().unwrap();
+
+    let mut cmd = Command::cargo_bin("jujo").unwrap();
+    cmd.current_dir(dir.path())
+        .env("NO_COLOR", "1")
+        .args(["init", "--lang", "brainfuck"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown language"));
+}
+
+#[test]
+fn list_generators() {
+    let dir = TempDir::new().unwrap();
+    seed_jujo(&dir);
+    seed_inject_generator(&dir);
+
+    jujo_cmd(&dir)
+        .args(["list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("example"))
+        .stdout(predicate::str::contains("module"));
+}
+
+#[test]
+fn list_generators_json() {
+    let dir = TempDir::new().unwrap();
+    seed_jujo(&dir);
+
+    let output = jujo_cmd(&dir)
+        .args(["list", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    let arr = json.as_array().unwrap();
+    assert!(!arr.is_empty());
+    assert!(arr.iter().any(|g| g["name"] == "example"));
+}
+
+#[test]
+fn describe_generator_json() {
+    let dir = TempDir::new().unwrap();
+    seed_jujo(&dir);
+
+    let output = jujo_cmd(&dir)
+        .args(["describe", "example", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(json["name"], "example");
+    assert!(json["inputs"].as_array().unwrap().len() > 0);
+    assert!(json["actions"].as_array().unwrap().len() > 0);
+    assert_eq!(json["inputs"][0]["name"], "module_name");
+    assert_eq!(json["inputs"][0]["type"], "string");
+}
+
+#[test]
+fn validate_all_ok() {
+    let dir = TempDir::new().unwrap();
+    seed_jujo(&dir);
+
+    jujo_cmd(&dir)
+        .args(["validate"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("All OK"));
+}
+
+#[test]
+fn validate_catches_bad_template() {
+    let dir = TempDir::new().unwrap();
+    seed_jujo(&dir);
+
+    // Add a generator with a broken template.
+    let bad_dir = dir.path().join(".jujo/templates/broken");
+    std::fs::create_dir_all(&bad_dir).unwrap();
+    std::fs::write(
+        bad_dir.join("generator.toml"),
+        "[generator]\nname = \"broken\"\ndescription = \"bad\"\n\n[[actions]]\ntype = \"create\"\ntemplate = \"bad.tera\"\noutput = \"out.txt\"\n",
+    ).unwrap();
+    std::fs::write(bad_dir.join("bad.tera"), "{{ unclosed").unwrap();
+
+    jujo_cmd(&dir)
+        .args(["validate"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("error"));
+}
+
+#[test]
+fn validate_catches_missing_template() {
+    let dir = TempDir::new().unwrap();
+    seed_jujo(&dir);
+
+    // Add a generator referencing a nonexistent template.
+    let bad_dir = dir.path().join(".jujo/templates/missing");
+    std::fs::create_dir_all(&bad_dir).unwrap();
+    std::fs::write(
+        bad_dir.join("generator.toml"),
+        "[generator]\nname = \"missing\"\ndescription = \"bad\"\n\n[[actions]]\ntype = \"create\"\ntemplate = \"nonexistent.tera\"\noutput = \"out.txt\"\n",
+    ).unwrap();
+
+    jujo_cmd(&dir)
+        .args(["validate"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("not found"));
+}
+
+#[test]
+fn init_then_validate_then_generate() {
+    let dir = TempDir::new().unwrap();
+
+    // Init.
+    let mut cmd = Command::cargo_bin("jujo").unwrap();
+    cmd.current_dir(dir.path())
+        .env("NO_COLOR", "1")
+        .args(["init", "--lang", "rust"])
+        .assert()
+        .success();
+
+    // Validate.
+    jujo_cmd(&dir).args(["validate"]).assert().success();
+
+    // Generate.
+    jujo_cmd(&dir)
+        .args(["generate", "example", "--var", "name=world"])
+        .assert()
+        .success();
+
+    assert!(dir.path().join("world.txt").exists());
+    let content = std::fs::read_to_string(dir.path().join("world.txt")).unwrap();
+    assert!(content.contains("World"));
+}
+
+#[test]
+fn full_agent_protocol() {
+    let dir = TempDir::new().unwrap();
+    seed_jujo(&dir);
+
+    // Phase 1: Discover.
+    let list_out = jujo_cmd(&dir)
+        .args(["list", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let generators: serde_json::Value = serde_json::from_slice(&list_out).unwrap();
+    let gen_name = generators[0]["name"].as_str().unwrap();
+
+    // Phase 2: Schema.
+    let describe_out = jujo_cmd(&dir)
+        .args(["describe", gen_name, "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let schema: serde_json::Value = serde_json::from_slice(&describe_out).unwrap();
+    assert!(schema["inputs"].as_array().unwrap().len() > 0);
+
+    // Phase 3: Preview.
+    let preview_out = jujo_cmd(&dir)
+        .args(["generate", gen_name, "--var", "module_name=test", "--dry-run", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let preview: serde_json::Value = serde_json::from_slice(&preview_out).unwrap();
+    assert!(preview["created"].as_array().unwrap().len() > 0);
+
+    // Phase 4: Execute.
+    let exec_out = jujo_cmd(&dir)
+        .args(["generate", gen_name, "--var", "module_name=test", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let result: serde_json::Value = serde_json::from_slice(&exec_out).unwrap();
+    assert!(result["created"].as_array().unwrap().len() > 0);
+}
