@@ -1,3 +1,4 @@
+use crate::types::{GeneratorName, MarkerName, TemplateName};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::Path;
@@ -13,7 +14,7 @@ pub struct GeneratorDef {
 
 #[derive(Debug, Deserialize)]
 pub struct GeneratorMeta {
-    pub name: String,
+    pub name: GeneratorName,
     pub description: String,
 }
 
@@ -48,13 +49,13 @@ pub enum InputType {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum Action {
     Create {
-        template: String,
-        output: String,
+        template: TemplateName,
+        output: String, // Tera expression — becomes RelativePath after rendering
     },
     Inject {
-        target: String,
-        marker: String,
-        content: String,
+        target: String, // Tera expression — validated after rendering
+        marker: MarkerName,
+        content: String, // Tera expression
     },
 }
 
@@ -92,7 +93,7 @@ template = "hello.tera"
 output = "src/{{ module_name }}.rs"
 "#;
         let def: GeneratorDef = toml::from_str(toml).unwrap();
-        assert_eq!(def.generator.name, "example");
+        assert_eq!(def.generator.name.as_ref(), "example");
         assert_eq!(def.inputs.len(), 1);
         assert_eq!(def.inputs[0].name, "module_name");
         assert_eq!(def.inputs[0].r#type, InputType::String);
@@ -100,7 +101,7 @@ output = "src/{{ module_name }}.rs"
         assert_eq!(def.actions.len(), 1);
         match &def.actions[0] {
             Action::Create { template, output } => {
-                assert_eq!(template, "hello.tera");
+                assert_eq!(template.as_ref(), "hello.tera");
                 assert_eq!(output, "src/{{ module_name }}.rs");
             }
             _ => panic!("expected Create action"),
@@ -118,7 +119,6 @@ output = "src/{{ module_name }}.rs"
     #[test]
     fn parse_wrong_schema() {
         let dir = TempDir::new().unwrap();
-        // Valid TOML but missing [generator] section.
         std::fs::write(
             dir.path().join("generator.toml"),
             "[wrong]\nkey = \"value\"",
@@ -170,7 +170,7 @@ content = "mod {{ module_name }};"
                 content,
             } => {
                 assert_eq!(target, "src/main.rs");
-                assert_eq!(marker, "modules");
+                assert_eq!(marker.as_ref(), "modules");
                 assert_eq!(content, "mod {{ module_name }};");
             }
             _ => panic!("expected Inject action"),

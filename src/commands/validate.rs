@@ -42,7 +42,7 @@ pub fn run(jujo_root: &Path) -> Result<()> {
         // Check 2: all template files referenced in create actions exist.
         for action in &def.actions {
             if let Action::Create { template, .. } = action {
-                let template_path = gen_dir.join(template);
+                let template_path = gen_dir.join(template.as_ref());
                 if !template_path.exists() {
                     errors.push(format!(
                         "{dir_name}: template file \"{template}\" not found (referenced in create action)"

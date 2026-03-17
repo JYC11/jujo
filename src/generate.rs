@@ -1,3 +1,4 @@
+use crate::types::RelativePath;
 use crate::{config, context, discovery, file_ops, generator, manifest, markers, render};
 use anyhow::Result;
 use owo_colors::OwoColorize;
@@ -21,7 +22,6 @@ pub fn run(
     let ctx = context::build_context(&def, &var_map, &project_config)?;
     let tera = render::create_tera(&gen_dir)?;
 
-    // --skip-existing silently skips injection conflicts, otherwise error.
     let conflict_mode = if skip_existing {
         file_ops::ConflictMode::Skip
     } else {
@@ -37,30 +37,28 @@ pub fn run(
             generator::Action::Create { template, output } => {
                 let rendered_output = render::render_expression(&tera, output, &ctx)?;
                 let rendered_content = render::render_template(&tera, template, &ctx)?;
+                let rel_path = RelativePath::new(&rendered_output)?;
 
-                customize_markers.extend(markers::extract_ai_markers(
-                    &rendered_output,
-                    &rendered_content,
-                ));
+                customize_markers.extend(markers::extract_ai_markers(&rel_path, &rendered_content));
 
                 if dry_run {
                     if !json_output {
-                        println!("  {} {}", label("create", Color::Green), rendered_output);
+                        println!("  {} {}", label("create", Color::Green), rel_path);
                     }
                     created_files.push(manifest::ManifestCreatedFile {
-                        path: rendered_output,
-                        template: template.clone(),
+                        path: rel_path,
+                        template: template.to_string(),
                     });
                 } else {
                     let result = file_ops::create_file(
                         &root,
-                        &rendered_output,
+                        &rel_path,
                         &rendered_content,
                         template,
                         force,
                     )?;
                     if let Some(hook) = &project_config.hooks.post_generate {
-                        run_hook(hook, &root.join(&result.path));
+                        hook.run(&root.join(result.path.as_ref()));
                     }
                     if !json_output {
                         println!("  {} {}", label("create", Color::Green), result.path);
@@ -110,7 +108,7 @@ pub fn run(
         .collect();
 
     let result = manifest::GenerationResult {
-        generator: def.generator.name.clone(),
+        generator: def.generator.name,
         timestamp: chrono::Utc::now().to_rfc3339(),
         inputs,
         created: created_files,
@@ -142,7 +140,7 @@ fn handle_inject(
     tera: &tera::Tera,
     ctx: &tera::Context,
     target: &str,
-    marker: &str,
+    marker: &crate::types::MarkerName,
     content: &str,
     config: &config::ProjectConfig,
     conflict_mode: file_ops::ConflictMode,
@@ -152,19 +150,20 @@ fn handle_inject(
 ) -> Result<()> {
     let rendered_content = render::render_expression(tera, content, ctx)?;
     let rendered_target = render::render_expression(tera, target, ctx)?;
+    let rel_path = RelativePath::new(&rendered_target)?;
 
     if dry_run {
         if !json_output {
             println!(
                 "  {} {} (marker: {})",
                 label("inject", Color::Yellow),
-                rendered_target,
+                rel_path,
                 marker
             );
         }
         injected.push(manifest::ManifestInjectedContent {
-            path: rendered_target,
-            marker: marker.to_string(),
+            path: rel_path,
+            marker: marker.clone(),
             content: rendered_content,
         });
         return Ok(());
@@ -172,11 +171,10 @@ fn handle_inject(
 
     let result = file_ops::inject_before_marker(
         root,
-        &rendered_target,
+        &rel_path,
         marker,
         &rendered_content,
-        &config.comment_prefix,
-        &config.comment_suffix,
+        &config.comment_style,
         conflict_mode,
     )?;
 
@@ -231,20 +229,4 @@ pub fn error_label() -> String {
         return "error:".to_string();
     }
     format!("{}", "error:".red().bold())
-}
-
-fn run_hook(hook_template: &str, file_path: &std::path::Path) {
-    let cmd = hook_template.replace("{file}", &file_path.display().to_string());
-    let result = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(&cmd)
-        .output();
-    match result {
-        Ok(output) if !output.status.success() => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            eprintln!("  hook warning: {cmd} failed: {stderr}");
-        }
-        Err(e) => eprintln!("  hook warning: failed to run \"{cmd}\": {e}"),
-        _ => {}
-    }
 }

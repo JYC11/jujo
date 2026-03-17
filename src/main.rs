@@ -10,6 +10,7 @@ mod generator;
 mod manifest;
 mod markers;
 mod render;
+mod types;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

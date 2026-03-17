@@ -1,23 +1,18 @@
+use crate::types::{AbstractType, TypeMap};
 use anyhow::{Result, bail};
 use serde::Serialize;
-use std::collections::BTreeMap;
-
-/// Known abstract types that jujo recognizes.
-const KNOWN_TYPES: &[&str] = &[
-    "string", "text", "int", "bool", "float", "decimal", "uuid", "date", "datetime", "json",
-];
 
 /// A parsed field specification.
 #[derive(Debug, Clone, Serialize)]
 pub struct FieldSpec {
     pub name: String,
-    pub r#type: String,
+    pub r#type: AbstractType,
     pub mapped_type: String,
     pub nullable: bool,
 }
 
 /// Parse a single field spec like "title:string" or "price:decimal?".
-pub fn parse_field(spec: &str, type_map: &BTreeMap<String, String>) -> Result<FieldSpec> {
+pub fn parse_field(spec: &str, type_map: &TypeMap) -> Result<FieldSpec> {
     let (name, type_part) = spec.split_once(':').ok_or_else(|| {
         anyhow::anyhow!("invalid field spec \"{spec}\". Expected name:type (e.g. \"title:string\")")
     })?;
@@ -27,43 +22,33 @@ pub fn parse_field(spec: &str, type_map: &BTreeMap<String, String>) -> Result<Fi
     }
 
     let nullable = type_part.ends_with('?');
-    let abstract_type = if nullable {
+    let type_str = if nullable {
         &type_part[..type_part.len() - 1]
     } else {
         type_part
     };
 
-    if !KNOWN_TYPES.contains(&abstract_type) {
-        bail!(
-            "unknown type \"{abstract_type}\" in field \"{spec}\". Valid types: {}",
-            KNOWN_TYPES.join(", ")
-        );
-    }
-
-    let mapped_type = type_map.get(abstract_type).ok_or_else(|| {
+    let abstract_type: AbstractType = type_str.parse().map_err(|_| {
         anyhow::anyhow!(
-            "type \"{abstract_type}\" has no mapping in config.toml [type_map]. \
-             add: {abstract_type} = \"<language type>\""
+            "unknown type \"{type_str}\" in field \"{spec}\". Valid types: {}",
+            AbstractType::all_names()
         )
     })?;
 
+    let mapped_type = type_map.lookup(&abstract_type)?;
+
     Ok(FieldSpec {
         name: name.to_string(),
-        r#type: abstract_type.to_string(),
-        mapped_type: mapped_type.clone(),
+        r#type: abstract_type,
+        mapped_type: mapped_type.to_string(),
         nullable,
     })
 }
 
 /// Parse a comma-separated string of field specs OR merge multiple values.
-/// Supports both `--var fields="a:string,b:int"` and repeated `--var fields=a:string`.
-pub fn parse_field_list(
-    values: &[String],
-    type_map: &BTreeMap<String, String>,
-) -> Result<Vec<FieldSpec>> {
+pub fn parse_field_list(values: &[String], type_map: &TypeMap) -> Result<Vec<FieldSpec>> {
     let mut fields = Vec::new();
     for value in values {
-        // Split on comma for comma-separated values.
         for spec in value.split(',') {
             let spec = spec.trim();
             if !spec.is_empty() {
@@ -77,9 +62,10 @@ pub fn parse_field_list(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
-    fn rust_type_map() -> BTreeMap<String, String> {
-        BTreeMap::from([
+    fn rust_type_map() -> TypeMap {
+        TypeMap::new(BTreeMap::from([
             ("string".into(), "String".into()),
             ("text".into(), "String".into()),
             ("int".into(), "i64".into()),
@@ -90,7 +76,7 @@ mod tests {
             ("date".into(), "chrono::NaiveDate".into()),
             ("datetime".into(), "chrono::DateTime<Utc>".into()),
             ("json".into(), "serde_json::Value".into()),
-        ])
+        ]))
     }
 
     #[test]
@@ -98,7 +84,7 @@ mod tests {
         let map = rust_type_map();
         let field = parse_field("title:string", &map).unwrap();
         assert_eq!(field.name, "title");
-        assert_eq!(field.r#type, "string");
+        assert_eq!(field.r#type, AbstractType::String);
         assert_eq!(field.mapped_type, "String");
         assert!(!field.nullable);
     }
@@ -108,7 +94,7 @@ mod tests {
         let map = rust_type_map();
         let field = parse_field("price:decimal?", &map).unwrap();
         assert_eq!(field.name, "price");
-        assert_eq!(field.r#type, "decimal");
+        assert_eq!(field.r#type, AbstractType::Decimal);
         assert_eq!(field.mapped_type, "rust_decimal::Decimal");
         assert!(field.nullable);
     }
@@ -137,7 +123,7 @@ mod tests {
 
     #[test]
     fn parse_unmapped_type() {
-        let empty_map = BTreeMap::new();
+        let empty_map = TypeMap::default();
         let err = parse_field("title:string", &empty_map).unwrap_err();
         assert!(err.to_string().contains("no mapping in config.toml"));
     }

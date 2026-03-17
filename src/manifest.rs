@@ -1,3 +1,4 @@
+use crate::types::{GeneratorName, MarkerName, RelativePath};
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -5,7 +6,7 @@ use std::path::Path;
 
 #[derive(Debug, Serialize)]
 pub struct GenerationResult {
-    pub generator: String,
+    pub generator: GeneratorName,
     pub timestamp: String,
     pub inputs: BTreeMap<String, serde_json::Value>,
     pub created: Vec<ManifestCreatedFile>,
@@ -15,20 +16,20 @@ pub struct GenerationResult {
 
 #[derive(Debug, Serialize)]
 pub struct ManifestCreatedFile {
-    pub path: String,
+    pub path: RelativePath,
     pub template: String,
 }
 
 #[derive(Debug, Serialize)]
 pub struct ManifestInjectedContent {
-    pub path: String,
-    pub marker: String,
+    pub path: RelativePath,
+    pub marker: MarkerName,
     pub content: String,
 }
 
 #[derive(Debug, Serialize)]
 pub struct ManifestCustomizeMarker {
-    pub path: String,
+    pub path: RelativePath,
     pub line: usize,
     pub hint: String,
 }
@@ -45,6 +46,7 @@ pub fn write_manifest(manifest_path: &Path, result: &GenerationResult) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::GeneratorName;
     use tempfile::TempDir;
 
     #[test]
@@ -53,14 +55,14 @@ mod tests {
         let path = dir.path().join("last-generate.json");
 
         let result = GenerationResult {
-            generator: "module".into(),
+            generator: GeneratorName::new("module").unwrap(),
             timestamp: "2026-03-17T14:30:00Z".into(),
             inputs: BTreeMap::from([(
                 "module_name".into(),
                 serde_json::Value::String("orders".into()),
             )]),
             created: vec![ManifestCreatedFile {
-                path: "src/orders/mod.rs".into(),
+                path: RelativePath::new("src/orders/mod.rs").unwrap(),
                 template: "mod.rs.tera".into(),
             }],
             injected: vec![],

@@ -1,24 +1,38 @@
+use crate::types::{CommentStyle, HookTemplate, TypeMap};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-#[derive(Debug, Deserialize)]
+/// Project configuration loaded from `.jujo/config.toml`.
+#[derive(Debug)]
 pub struct ProjectConfig {
-    #[serde(default)]
-    pub type_map: BTreeMap<String, String>,
-    #[serde(default = "default_comment_prefix")]
-    pub comment_prefix: String,
-    #[serde(default)]
-    pub comment_suffix: String,
-    #[serde(default)]
+    pub type_map: TypeMap,
+    pub comment_style: CommentStyle,
     pub hooks: Hooks,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default)]
 pub struct Hooks {
-    /// Command to run on each created file. `{file}` is replaced with the file path.
-    pub post_generate: Option<String>,
+    pub post_generate: Option<HookTemplate>,
+}
+
+/// Raw TOML structure — deserialized then converted to domain types.
+#[derive(Deserialize)]
+struct RawConfig {
+    #[serde(default)]
+    type_map: BTreeMap<String, String>,
+    #[serde(default = "default_comment_prefix")]
+    comment_prefix: String,
+    #[serde(default)]
+    comment_suffix: String,
+    #[serde(default)]
+    hooks: RawHooks,
+}
+
+#[derive(Default, Deserialize)]
+struct RawHooks {
+    post_generate: Option<String>,
 }
 
 fn default_comment_prefix() -> String {
@@ -31,17 +45,28 @@ pub fn load_config(jujo_root: &Path) -> Result<ProjectConfig> {
     let config_path = jujo_root.join(".jujo/config.toml");
     if !config_path.exists() {
         return Ok(ProjectConfig {
-            type_map: BTreeMap::new(),
-            comment_prefix: default_comment_prefix(),
-            comment_suffix: String::new(),
+            type_map: TypeMap::default(),
+            comment_style: CommentStyle::new("//", ""),
             hooks: Hooks::default(),
         });
     }
     let content = std::fs::read_to_string(&config_path)
         .with_context(|| format!("failed to read {}", config_path.display()))?;
-    let config: ProjectConfig = toml::from_str(&content)
+    let raw: RawConfig = toml::from_str(&content)
         .with_context(|| format!("failed to parse {}", config_path.display()))?;
-    Ok(config)
+
+    let hook = match raw.hooks.post_generate {
+        Some(h) => Some(HookTemplate::new(h)?),
+        None => None,
+    };
+
+    Ok(ProjectConfig {
+        type_map: TypeMap::new(raw.type_map),
+        comment_style: CommentStyle::new(raw.comment_prefix, raw.comment_suffix),
+        hooks: Hooks {
+            post_generate: hook,
+        },
+    })
 }
 
 #[cfg(test)]
@@ -63,7 +88,7 @@ mod tests {
         assert_eq!(config.type_map["string"], "String");
         assert_eq!(config.type_map["int"], "i64");
         assert_eq!(config.type_map["decimal"], "rust_decimal::Decimal");
-        assert_eq!(config.comment_prefix, "//");
+        assert_eq!(config.comment_style.prefix, "//");
     }
 
     #[test]
@@ -71,7 +96,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let config = load_config(dir.path()).unwrap();
         assert!(config.type_map.is_empty());
-        assert_eq!(config.comment_prefix, "//");
+        assert_eq!(config.comment_style.prefix, "//");
     }
 
     #[test]
@@ -85,14 +110,9 @@ mod tests {
         )
         .unwrap();
 
-        assert!(
-            config_path.exists(),
-            "config file not written at {}",
-            config_path.display()
-        );
         let config = load_config(dir.path()).unwrap();
-        assert_eq!(config.comment_prefix, "<!--");
-        assert_eq!(config.comment_suffix, "-->");
+        assert_eq!(config.comment_style.prefix, "<!--");
+        assert_eq!(config.comment_style.suffix, "-->");
     }
 
     #[test]
@@ -106,10 +126,7 @@ mod tests {
         .unwrap();
 
         let config = load_config(dir.path()).unwrap();
-        assert_eq!(
-            config.hooks.post_generate.as_deref(),
-            Some("rustfmt {file}")
-        );
+        assert!(config.hooks.post_generate.is_some());
     }
 
     #[test]

@@ -124,7 +124,7 @@ fn build_schema(def: &generator::GeneratorDef) -> GeneratorSchema {
         .map(|a| match a {
             Action::Create { template, output } => ActionSchema {
                 r#type: "create".into(),
-                template: Some(template.clone()),
+                template: Some(template.to_string()),
                 output: Some(output.clone()),
                 target: None,
                 marker: None,
@@ -134,13 +134,13 @@ fn build_schema(def: &generator::GeneratorDef) -> GeneratorSchema {
                 template: None,
                 output: None,
                 target: Some(target.clone()),
-                marker: Some(marker.clone()),
+                marker: Some(marker.to_string()),
             },
         })
         .collect();
 
     GeneratorSchema {
-        name: def.generator.name.clone(),
+        name: def.generator.name.to_string(),
         description: def.generator.description.clone(),
         inputs,
         actions,

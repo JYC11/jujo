@@ -19,7 +19,7 @@ pub fn run(jujo_root: &Path, json: bool) -> Result<()> {
         let summaries: Vec<GeneratorSummary> = generators
             .iter()
             .map(|(_, def)| GeneratorSummary {
-                name: def.generator.name.clone(),
+                name: def.generator.name.to_string(),
                 description: def.generator.description.clone(),
             })
             .collect();

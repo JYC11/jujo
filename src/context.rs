@@ -6,7 +6,6 @@ use std::collections::BTreeMap;
 use tera::Context;
 
 /// Parse `--var key=value` strings into a multi-map. Splits on first `=` only.
-/// Repeated keys accumulate values (supports both comma-separated and repeated --var).
 pub fn parse_vars(vars: &[String]) -> Result<BTreeMap<String, Vec<String>>> {
     let mut map: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for var in vars {
@@ -33,7 +32,6 @@ pub fn build_context(
 
         match input.r#type {
             InputType::String => {
-                // Take the last value if multiple provided.
                 let value = values.and_then(|v| v.last().map(|s| s.as_str()));
                 if let Some(value) = value {
                     ctx.insert(&input.name, value);
@@ -61,13 +59,11 @@ pub fn build_context(
                         input.name
                     );
                 } else {
-                    // Insert empty array for optional field arrays.
                     ctx.insert(&input.name, &Vec::<fields::FieldSpec>::new());
                 }
             }
             InputType::StringArray => {
                 if let Some(values) = values {
-                    // Flatten comma-separated values.
                     let flat: Vec<String> = values
                         .iter()
                         .flat_map(|v| v.split(',').map(|s| s.trim().to_string()))
@@ -137,11 +133,12 @@ mod tests {
     use super::*;
     use crate::config;
     use crate::generator::{GeneratorMeta, InputDef};
+    use crate::types::{CommentStyle, GeneratorName, TypeMap};
 
     fn make_def(inputs: Vec<InputDef>) -> GeneratorDef {
         GeneratorDef {
             generator: GeneratorMeta {
-                name: "test".into(),
+                name: GeneratorName::new("test").unwrap(),
                 description: "test".into(),
             },
             inputs,
@@ -171,23 +168,21 @@ mod tests {
 
     fn empty_config() -> ProjectConfig {
         ProjectConfig {
-            type_map: BTreeMap::new(),
-            comment_prefix: "//".into(),
-            comment_suffix: String::new(),
+            type_map: TypeMap::default(),
+            comment_style: CommentStyle::new("//", ""),
             hooks: config::Hooks::default(),
         }
     }
 
     fn rust_config() -> ProjectConfig {
         ProjectConfig {
-            type_map: BTreeMap::from([
+            type_map: TypeMap::new(BTreeMap::from([
                 ("string".into(), "String".into()),
                 ("int".into(), "i64".into()),
                 ("bool".into(), "bool".into()),
                 ("decimal".into(), "rust_decimal::Decimal".into()),
-            ]),
-            comment_prefix: "//".into(),
-            comment_suffix: String::new(),
+            ])),
+            comment_style: CommentStyle::new("//", ""),
             hooks: config::Hooks::default(),
         }
     }
@@ -317,7 +312,6 @@ mod tests {
             required: true,
             default: None,
         }]);
-        // Comma-separated.
         let vars = BTreeMap::from([("tags".into(), vec!["alpha,beta,gamma".into()])]);
         let ctx = build_context(&def, &vars, &empty_config()).unwrap();
         let tags = ctx.get("tags").unwrap().as_array().unwrap();
