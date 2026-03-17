@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::path::Path;
 
 /// Result of creating a file.
@@ -152,7 +152,14 @@ mod tests {
     #[test]
     fn create_file_nested_dirs() {
         let dir = TempDir::new().unwrap();
-        create_file(dir.path(), "src/orders/mod.rs", "mod routes;", "mod.tera", false).unwrap();
+        create_file(
+            dir.path(),
+            "src/orders/mod.rs",
+            "mod routes;",
+            "mod.tera",
+            false,
+        )
+        .unwrap();
         assert!(dir.path().join("src/orders/mod.rs").exists());
     }
 
@@ -197,8 +204,15 @@ mod tests {
         let dir = TempDir::new().unwrap();
         write_file_with_marker(&dir, "main.rs", "//", "", "modules");
         let result = inject_before_marker(
-            dir.path(), "main.rs", "modules", "mod orders;", "//", "", ConflictMode::Error,
-        ).unwrap();
+            dir.path(),
+            "main.rs",
+            "modules",
+            "mod orders;",
+            "//",
+            "",
+            ConflictMode::Error,
+        )
+        .unwrap();
         assert!(!result.skipped);
         let content = std::fs::read_to_string(dir.path().join("main.rs")).unwrap();
         assert!(content.contains("mod orders;\n// </jujo:modules>"));
@@ -209,8 +223,15 @@ mod tests {
         let dir = TempDir::new().unwrap();
         write_file_with_marker(&dir, "config.py", "#", "", "imports");
         inject_before_marker(
-            dir.path(), "config.py", "imports", "import os", "#", "", ConflictMode::Error,
-        ).unwrap();
+            dir.path(),
+            "config.py",
+            "imports",
+            "import os",
+            "#",
+            "",
+            ConflictMode::Error,
+        )
+        .unwrap();
         let content = std::fs::read_to_string(dir.path().join("config.py")).unwrap();
         assert!(content.contains("import os\n# </jujo:imports>"));
     }
@@ -220,9 +241,15 @@ mod tests {
         let dir = TempDir::new().unwrap();
         write_file_with_marker(&dir, "index.html", "<!--", "-->", "scripts");
         inject_before_marker(
-            dir.path(), "index.html", "scripts", "<script src=\"app.js\"></script>",
-            "<!--", "-->", ConflictMode::Error,
-        ).unwrap();
+            dir.path(),
+            "index.html",
+            "scripts",
+            "<script src=\"app.js\"></script>",
+            "<!--",
+            "-->",
+            ConflictMode::Error,
+        )
+        .unwrap();
         let content = std::fs::read_to_string(dir.path().join("index.html")).unwrap();
         assert!(content.contains("<script src=\"app.js\"></script>\n<!-- </jujo:scripts> -->"));
     }
@@ -232,8 +259,15 @@ mod tests {
         let dir = TempDir::new().unwrap();
         std::fs::write(dir.path().join("file.rs"), "no marker here\n").unwrap();
         let err = inject_before_marker(
-            dir.path(), "file.rs", "modules", "mod x;", "//", "", ConflictMode::Error,
-        ).unwrap_err();
+            dir.path(),
+            "file.rs",
+            "modules",
+            "mod x;",
+            "//",
+            "",
+            ConflictMode::Error,
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("marker \"modules\" not found"));
     }
 
@@ -243,14 +277,28 @@ mod tests {
         std::fs::write(
             dir.path().join("main.rs"),
             "// </jujo:modules>\n// </jujo:routes>\n",
-        ).unwrap();
+        )
+        .unwrap();
         inject_before_marker(
-            dir.path(), "main.rs", "modules", "mod orders;", "//", "", ConflictMode::Error,
-        ).unwrap();
+            dir.path(),
+            "main.rs",
+            "modules",
+            "mod orders;",
+            "//",
+            "",
+            ConflictMode::Error,
+        )
+        .unwrap();
         inject_before_marker(
-            dir.path(), "main.rs", "routes", ".nest(\"/orders\", orders::router())",
-            "//", "", ConflictMode::Error,
-        ).unwrap();
+            dir.path(),
+            "main.rs",
+            "routes",
+            ".nest(\"/orders\", orders::router())",
+            "//",
+            "",
+            ConflictMode::Error,
+        )
+        .unwrap();
         let content = std::fs::read_to_string(dir.path().join("main.rs")).unwrap();
         assert!(content.contains("mod orders;\n// </jujo:modules>"));
         assert!(content.contains(".nest(\"/orders\", orders::router())\n// </jujo:routes>"));
@@ -262,10 +310,18 @@ mod tests {
         std::fs::write(
             dir.path().join("main.rs"),
             "mod orders;\n// </jujo:modules>\n",
-        ).unwrap();
+        )
+        .unwrap();
         let err = inject_before_marker(
-            dir.path(), "main.rs", "modules", "mod orders;", "//", "", ConflictMode::Error,
-        ).unwrap_err();
+            dir.path(),
+            "main.rs",
+            "modules",
+            "mod orders;",
+            "//",
+            "",
+            ConflictMode::Error,
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("content already present"));
         assert!(err.to_string().contains("--force"));
         assert!(err.to_string().contains("--skip-existing"));
@@ -277,10 +333,18 @@ mod tests {
         std::fs::write(
             dir.path().join("main.rs"),
             "mod orders;\n// </jujo:modules>\n",
-        ).unwrap();
+        )
+        .unwrap();
         let result = inject_before_marker(
-            dir.path(), "main.rs", "modules", "mod orders;", "//", "", ConflictMode::Force,
-        ).unwrap();
+            dir.path(),
+            "main.rs",
+            "modules",
+            "mod orders;",
+            "//",
+            "",
+            ConflictMode::Force,
+        )
+        .unwrap();
         assert!(!result.skipped);
         // Content is duplicated (user asked for force).
         let content = std::fs::read_to_string(dir.path().join("main.rs")).unwrap();
@@ -293,10 +357,18 @@ mod tests {
         std::fs::write(
             dir.path().join("main.rs"),
             "mod orders;\n// </jujo:modules>\n",
-        ).unwrap();
+        )
+        .unwrap();
         let result = inject_before_marker(
-            dir.path(), "main.rs", "modules", "mod orders;", "//", "", ConflictMode::Skip,
-        ).unwrap();
+            dir.path(),
+            "main.rs",
+            "modules",
+            "mod orders;",
+            "//",
+            "",
+            ConflictMode::Skip,
+        )
+        .unwrap();
         assert!(result.skipped);
         // Content not duplicated.
         let content = std::fs::read_to_string(dir.path().join("main.rs")).unwrap();

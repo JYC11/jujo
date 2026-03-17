@@ -1,7 +1,7 @@
 use crate::config::ProjectConfig;
 use crate::fields;
 use crate::generator::{GeneratorDef, InputType};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::collections::BTreeMap;
 use tera::Context;
 
@@ -10,9 +10,9 @@ use tera::Context;
 pub fn parse_vars(vars: &[String]) -> Result<BTreeMap<String, Vec<String>>> {
     let mut map: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for var in vars {
-        let (key, value) = var
-            .split_once('=')
-            .ok_or_else(|| anyhow::anyhow!("invalid --var format: \"{var}\". Expected key=value"))?;
+        let (key, value) = var.split_once('=').ok_or_else(|| {
+            anyhow::anyhow!("invalid --var format: \"{var}\". Expected key=value")
+        })?;
         map.entry(key.to_string())
             .or_default()
             .push(value.to_string());
@@ -38,9 +38,9 @@ pub fn build_context(
                 if let Some(value) = value {
                     ctx.insert(&input.name, value);
                 } else if let Some(default) = &input.default {
-                    let value = default
-                        .as_str()
-                        .ok_or_else(|| anyhow::anyhow!("default for \"{}\" must be a string", input.name))?;
+                    let value = default.as_str().ok_or_else(|| {
+                        anyhow::anyhow!("default for \"{}\" must be a string", input.name)
+                    })?;
                     ctx.insert(&input.name, value);
                 } else if input.required {
                     bail!(
@@ -90,13 +90,17 @@ pub fn build_context(
                     let b = match value {
                         "true" | "1" | "yes" => true,
                         "false" | "0" | "no" => false,
-                        _ => bail!("invalid bool value \"{}\" for input \"{}\". Use true/false", value, input.name),
+                        _ => bail!(
+                            "invalid bool value \"{}\" for input \"{}\". Use true/false",
+                            value,
+                            input.name
+                        ),
                     };
                     ctx.insert(&input.name, &b);
                 } else if let Some(default) = &input.default {
-                    let b = default
-                        .as_bool()
-                        .ok_or_else(|| anyhow::anyhow!("default for \"{}\" must be a boolean", input.name))?;
+                    let b = default.as_bool().ok_or_else(|| {
+                        anyhow::anyhow!("default for \"{}\" must be a boolean", input.name)
+                    })?;
                     ctx.insert(&input.name, &b);
                 } else if input.required {
                     bail!("missing required input \"{}\"", input.name);
@@ -106,13 +110,17 @@ pub fn build_context(
                 let value = values.and_then(|v| v.last().map(|s| s.as_str()));
                 if let Some(value) = value {
                     let n: i64 = value.parse().map_err(|_| {
-                        anyhow::anyhow!("invalid integer \"{}\" for input \"{}\"", value, input.name)
+                        anyhow::anyhow!(
+                            "invalid integer \"{}\" for input \"{}\"",
+                            value,
+                            input.name
+                        )
                     })?;
                     ctx.insert(&input.name, &n);
                 } else if let Some(default) = &input.default {
-                    let n = default
-                        .as_integer()
-                        .ok_or_else(|| anyhow::anyhow!("default for \"{}\" must be an integer", input.name))?;
+                    let n = default.as_integer().ok_or_else(|| {
+                        anyhow::anyhow!("default for \"{}\" must be an integer", input.name)
+                    })?;
                     ctx.insert(&input.name, &n);
                 } else if input.required {
                     bail!("missing required input \"{}\"", input.name);

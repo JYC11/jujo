@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::path::{Path, PathBuf};
 
 const JUJO_DIR: &str = ".jujo";
@@ -42,9 +42,7 @@ pub fn generator_dir(jujo_root: &Path, name: &str) -> Result<PathBuf> {
         }
     }
 
-    bail!(
-        "unknown generator \"{name}\". Not found in .jujo/templates/ or ~/.jujo/templates/"
-    );
+    bail!("unknown generator \"{name}\". Not found in .jujo/templates/ or ~/.jujo/templates/");
 }
 
 /// Path to the manifest file.

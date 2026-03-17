@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
@@ -19,9 +19,7 @@ pub struct FieldSpec {
 /// Parse a single field spec like "title:string" or "price:decimal?".
 pub fn parse_field(spec: &str, type_map: &BTreeMap<String, String>) -> Result<FieldSpec> {
     let (name, type_part) = spec.split_once(':').ok_or_else(|| {
-        anyhow::anyhow!(
-            "invalid field spec \"{spec}\". Expected name:type (e.g. \"title:string\")"
-        )
+        anyhow::anyhow!("invalid field spec \"{spec}\". Expected name:type (e.g. \"title:string\")")
     })?;
 
     if name.is_empty() {
@@ -159,10 +157,7 @@ mod tests {
     #[test]
     fn parse_repeated_var_list() {
         let map = rust_type_map();
-        let values = vec![
-            "title:string".into(),
-            "price:decimal?".into(),
-        ];
+        let values = vec!["title:string".into(), "price:decimal?".into()];
         let fields = parse_field_list(&values, &map).unwrap();
         assert_eq!(fields.len(), 2);
         assert_eq!(fields[0].name, "title");
@@ -172,10 +167,7 @@ mod tests {
     #[test]
     fn parse_mixed_comma_and_repeated() {
         let map = rust_type_map();
-        let values = vec![
-            "title:string,price:decimal?".into(),
-            "active:bool".into(),
-        ];
+        let values = vec!["title:string,price:decimal?".into(), "active:bool".into()];
         let fields = parse_field_list(&values, &map).unwrap();
         assert_eq!(fields.len(), 3);
     }

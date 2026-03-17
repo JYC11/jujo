@@ -85,7 +85,11 @@ mod tests {
         )
         .unwrap();
 
-        assert!(config_path.exists(), "config file not written at {}", config_path.display());
+        assert!(
+            config_path.exists(),
+            "config file not written at {}",
+            config_path.display()
+        );
         let config = load_config(dir.path()).unwrap();
         assert_eq!(config.comment_prefix, "<!--");
         assert_eq!(config.comment_suffix, "-->");

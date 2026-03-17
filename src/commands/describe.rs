@@ -49,13 +49,20 @@ pub fn run(jujo_root: &Path, name: &str, json: bool) -> Result<()> {
         println!();
         println!("Inputs:");
         for input in &schema.inputs {
-            let req = if input.required { "required" } else { "optional" };
+            let req = if input.required {
+                "required"
+            } else {
+                "optional"
+            };
             let default = input
                 .default
                 .as_ref()
                 .map(|d| format!(" (default: {d})"))
                 .unwrap_or_default();
-            println!("  {} ({}, {}{}) — {}", input.name, input.r#type, req, default, input.description);
+            println!(
+                "  {} ({}, {}{}) — {}",
+                input.name, input.r#type, req, default, input.description
+            );
         }
         println!();
         println!("Actions:");
@@ -122,9 +129,7 @@ fn build_schema(def: &generator::GeneratorDef) -> GeneratorSchema {
                 target: None,
                 marker: None,
             },
-            Action::Inject {
-                target, marker, ..
-            } => ActionSchema {
+            Action::Inject { target, marker, .. } => ActionSchema {
                 r#type: "inject".into(),
                 template: None,
                 output: None,

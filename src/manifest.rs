@@ -35,8 +35,8 @@ pub struct ManifestCustomizeMarker {
 
 /// Write the generation manifest to `.jujo/last-generate.json`.
 pub fn write_manifest(manifest_path: &Path, result: &GenerationResult) -> Result<()> {
-    let json = serde_json::to_string_pretty(result)
-        .context("failed to serialize generation manifest")?;
+    let json =
+        serde_json::to_string_pretty(result).context("failed to serialize generation manifest")?;
     std::fs::write(manifest_path, json)
         .with_context(|| format!("failed to write manifest to {}", manifest_path.display()))?;
     Ok(())
@@ -55,9 +55,10 @@ mod tests {
         let result = GenerationResult {
             generator: "module".into(),
             timestamp: "2026-03-17T14:30:00Z".into(),
-            inputs: BTreeMap::from([
-                ("module_name".into(), serde_json::Value::String("orders".into())),
-            ]),
+            inputs: BTreeMap::from([(
+                "module_name".into(),
+                serde_json::Value::String("orders".into()),
+            )]),
             created: vec![ManifestCreatedFile {
                 path: "src/orders/mod.rs".into(),
                 template: "mod.rs.tera".into(),

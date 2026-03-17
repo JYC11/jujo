@@ -68,7 +68,10 @@ pub fn run(jujo_root: &Path) -> Result<()> {
     if errors.is_empty() {
         println!("Validated {checked} generator(s). All OK.");
     } else {
-        println!("Validated {checked} generator(s). {} error(s):\n", errors.len());
+        println!(
+            "Validated {checked} generator(s). {} error(s):\n",
+            errors.len()
+        );
         for error in &errors {
             println!("  {error}");
         }

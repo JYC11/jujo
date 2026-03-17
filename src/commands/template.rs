@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::path::Path;
 
 /// Copy a template set from a local path into .jujo/templates/.
@@ -8,10 +8,7 @@ pub fn add(jujo_root: &Path, name: &str, from: &str, force: bool) -> Result<()> 
         bail!("source path \"{}\" is not a directory", from);
     }
     if !source.join("generator.toml").exists() {
-        bail!(
-            "source path \"{}\" does not contain a generator.toml",
-            from
-        );
+        bail!("source path \"{}\" does not contain a generator.toml", from);
     }
 
     let dest = jujo_root.join(".jujo/templates").join(name);
@@ -87,7 +84,11 @@ mod tests {
 
         add(dir.path(), "mygen", src.to_str().unwrap(), false).unwrap();
 
-        assert!(dir.path().join(".jujo/templates/mygen/generator.toml").exists());
+        assert!(
+            dir.path()
+                .join(".jujo/templates/mygen/generator.toml")
+                .exists()
+        );
         assert!(dir.path().join(".jujo/templates/mygen/hello.tera").exists());
     }
 
@@ -112,7 +113,11 @@ mod tests {
 
         add(dir.path(), "mygen", src.to_str().unwrap(), true).unwrap();
 
-        assert!(dir.path().join(".jujo/templates/mygen/generator.toml").exists());
+        assert!(
+            dir.path()
+                .join(".jujo/templates/mygen/generator.toml")
+                .exists()
+        );
         assert!(!dir.path().join(".jujo/templates/mygen/old.txt").exists());
     }
 

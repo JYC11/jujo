@@ -26,7 +26,9 @@ pub fn run(jujo_root: &Path, json: bool) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&summaries)?);
     } else if generators.is_empty() {
         println!("No generators found in .jujo/templates/");
-        println!("Create one with: mkdir -p .jujo/templates/<name> && edit .jujo/templates/<name>/generator.toml");
+        println!(
+            "Create one with: mkdir -p .jujo/templates/<name> && edit .jujo/templates/<name>/generator.toml"
+        );
     } else {
         for (dir_name, def) in &generators {
             println!("  {} — {}", dir_name, def.generator.description);
@@ -43,7 +45,11 @@ pub fn find_all_generators(jujo_root: &Path) -> Result<Vec<(String, generator::G
     let mut seen_names = BTreeSet::new();
 
     // Project-local first (takes priority).
-    scan_templates_dir(&jujo_root.join(".jujo/templates"), &mut generators, &mut seen_names);
+    scan_templates_dir(
+        &jujo_root.join(".jujo/templates"),
+        &mut generators,
+        &mut seen_names,
+    );
 
     // Global second (skips duplicates).
     if let Some(global) = discovery::global_jujo_dir() {

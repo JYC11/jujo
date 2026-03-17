@@ -53,22 +53,13 @@ pub fn create_tera(gen_dir: &Path) -> Result<Tera> {
 }
 
 /// Render a named template with the given context.
-pub fn render_template(
-    tera: &Tera,
-    template_name: &str,
-    ctx: &tera::Context,
-) -> Result<String> {
-    tera.render(template_name, ctx).with_context(|| {
-        format!("failed to render template \"{template_name}\"")
-    })
+pub fn render_template(tera: &Tera, template_name: &str, ctx: &tera::Context) -> Result<String> {
+    tera.render(template_name, ctx)
+        .with_context(|| format!("failed to render template \"{template_name}\""))
 }
 
 /// Render a Tera expression string (e.g., an output path) with the given context.
-pub fn render_expression(
-    tera: &Tera,
-    expr: &str,
-    ctx: &tera::Context,
-) -> Result<String> {
+pub fn render_expression(tera: &Tera, expr: &str, ctx: &tera::Context) -> Result<String> {
     // Use Tera's one-off rendering for inline expressions.
     let mut one_off = tera.clone();
     one_off

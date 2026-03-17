@@ -38,9 +38,10 @@ pub fn run(
                 let rendered_output = render::render_expression(&tera, output, &ctx)?;
                 let rendered_content = render::render_template(&tera, template, &ctx)?;
 
-                customize_markers.extend(
-                    markers::extract_ai_markers(&rendered_output, &rendered_content),
-                );
+                customize_markers.extend(markers::extract_ai_markers(
+                    &rendered_output,
+                    &rendered_content,
+                ));
 
                 if dry_run {
                     if !json_output {
@@ -96,7 +97,10 @@ pub fn run(
         .into_iter()
         .map(|(k, values)| {
             if values.len() == 1 {
-                (k, serde_json::Value::String(values.into_iter().next().unwrap()))
+                (
+                    k,
+                    serde_json::Value::String(values.into_iter().next().unwrap()),
+                )
             } else {
                 let arr: Vec<serde_json::Value> =
                     values.into_iter().map(serde_json::Value::String).collect();
@@ -122,7 +126,11 @@ pub fn run(
         let manifest_path = discovery::manifest_path(&root);
         manifest::write_manifest(&manifest_path, &result)?;
         if !json_output {
-            println!("\n  {} {}", label("manifest", Color::Blue), manifest_path.display());
+            println!(
+                "\n  {} {}",
+                label("manifest", Color::Blue),
+                manifest_path.display()
+            );
         }
     }
 

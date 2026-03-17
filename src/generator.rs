@@ -119,7 +119,11 @@ output = "src/{{ module_name }}.rs"
     fn parse_wrong_schema() {
         let dir = TempDir::new().unwrap();
         // Valid TOML but missing [generator] section.
-        std::fs::write(dir.path().join("generator.toml"), "[wrong]\nkey = \"value\"").unwrap();
+        std::fs::write(
+            dir.path().join("generator.toml"),
+            "[wrong]\nkey = \"value\"",
+        )
+        .unwrap();
         let err = load_generator(dir.path()).unwrap_err();
         assert!(err.to_string().contains("failed to parse"));
     }
