@@ -79,15 +79,16 @@ fn generate_creates_files() {
         .stdout(predicate::str::contains("manifest"));
 
     // Files exist with correct content.
-    let mod_content =
-        std::fs::read_to_string(dir.path().join("src/orders/mod.rs")).unwrap();
+    let mod_content = std::fs::read_to_string(dir.path().join("src/orders/mod.rs")).unwrap();
     assert_eq!(mod_content.trim(), "pub mod routes;");
 
-    let routes_content =
-        std::fs::read_to_string(dir.path().join("src/orders/routes.rs")).unwrap();
+    let routes_content = std::fs::read_to_string(dir.path().join("src/orders/routes.rs")).unwrap();
     assert!(routes_content.contains("list_orders"), "singularize failed");
     assert!(routes_content.contains("Vec<Order>"), "pascal_case failed");
-    assert!(routes_content.contains("// hello"), "default value not applied");
+    assert!(
+        routes_content.contains("// hello"),
+        "default value not applied"
+    );
 }
 
 #[test]
@@ -169,7 +170,13 @@ fn generate_file_exists_with_force() {
 
     // Run again with --force.
     jujo_cmd(&dir)
-        .args(["generate", "example", "--var", "module_name=orders", "--force"])
+        .args([
+            "generate",
+            "example",
+            "--var",
+            "module_name=orders",
+            "--force",
+        ])
         .assert()
         .success();
 }
@@ -278,8 +285,14 @@ fn generate_with_fields_comma_separated() {
         .stdout(predicate::str::contains("create src/order.rs"));
 
     let content = std::fs::read_to_string(dir.path().join("src/order.rs")).unwrap();
-    assert!(content.contains("pub struct Order"), "EntityName not rendered");
-    assert!(content.contains("pub title: String"), "string field missing");
+    assert!(
+        content.contains("pub struct Order"),
+        "EntityName not rendered"
+    );
+    assert!(
+        content.contains("pub title: String"),
+        "string field missing"
+    );
     assert!(
         content.contains("Option<rust_decimal::Decimal>"),
         "nullable decimal not rendered"
@@ -450,7 +463,13 @@ fn inject_conflict_default_error() {
 
     // Second run: --force allows file overwrite but injection still conflicts.
     jujo_cmd(&dir)
-        .args(["generate", "module", "--var", "module_name=orders", "--force"])
+        .args([
+            "generate",
+            "module",
+            "--var",
+            "module_name=orders",
+            "--force",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("content already present"));
@@ -469,8 +488,12 @@ fn inject_conflict_skip_existing() {
     // Second run with --skip-existing + --force (force for file, skip for inject).
     jujo_cmd(&dir)
         .args([
-            "generate", "module", "--var", "module_name=orders",
-            "--force", "--skip-existing",
+            "generate",
+            "module",
+            "--var",
+            "module_name=orders",
+            "--force",
+            "--skip-existing",
         ])
         .assert()
         .success()
@@ -487,7 +510,13 @@ fn dry_run_no_files_written() {
     seed_inject_generator(&dir);
 
     jujo_cmd(&dir)
-        .args(["generate", "module", "--var", "module_name=orders", "--dry-run"])
+        .args([
+            "generate",
+            "module",
+            "--var",
+            "module_name=orders",
+            "--dry-run",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("create"))
@@ -508,7 +537,13 @@ fn json_output_valid() {
     seed_inject_generator(&dir);
 
     let output = jujo_cmd(&dir)
-        .args(["generate", "module", "--var", "module_name=orders", "--json"])
+        .args([
+            "generate",
+            "module",
+            "--var",
+            "module_name=orders",
+            "--json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -529,8 +564,12 @@ fn dry_run_json_output() {
 
     let output = jujo_cmd(&dir)
         .args([
-            "generate", "module", "--var", "module_name=orders",
-            "--dry-run", "--json",
+            "generate",
+            "module",
+            "--var",
+            "module_name=orders",
+            "--dry-run",
+            "--json",
         ])
         .assert()
         .success()
@@ -563,7 +602,11 @@ fn init_creates_jujo_dir() {
         .stdout(predicate::str::contains("rust"));
 
     assert!(dir.path().join(".jujo/config.toml").exists());
-    assert!(dir.path().join(".jujo/templates/example/generator.toml").exists());
+    assert!(
+        dir.path()
+            .join(".jujo/templates/example/generator.toml")
+            .exists()
+    );
 
     // Config has Rust type map.
     let config = std::fs::read_to_string(dir.path().join(".jujo/config.toml")).unwrap();
@@ -612,6 +655,95 @@ fn init_unknown_language() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("unknown language"));
+}
+
+#[test]
+fn init_creates_languages_toml() {
+    let dir = TempDir::new().unwrap();
+
+    jujo_cmd(&dir)
+        .args(["init", "--lang", "rust"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("languages.toml"));
+
+    let langs_file = dir.path().join(".jujo/languages.toml");
+    assert!(langs_file.exists());
+
+    let content = std::fs::read_to_string(&langs_file).unwrap();
+    // Should contain all built-in languages.
+    assert!(content.contains("[rust]"));
+    assert!(content.contains("[go]"));
+    assert!(content.contains("[python]"));
+    assert!(content.contains("[typescript]"));
+    assert!(content.contains("[csharp]"));
+    assert!(content.contains("[kotlin]"));
+    assert!(content.contains("[ruby]"));
+    assert!(content.contains("[swift]"));
+    assert!(content.contains("[elixir]"));
+    assert!(content.contains("[php]"));
+}
+
+#[test]
+fn init_new_languages() {
+    // Test each new language produces a valid config.
+    for lang in ["csharp", "kotlin", "ruby", "php", "swift", "elixir"] {
+        let dir = TempDir::new().unwrap();
+        jujo_cmd(&dir)
+            .args(["init", "--lang", lang])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(lang));
+
+        let config = std::fs::read_to_string(dir.path().join(".jujo/config.toml")).unwrap();
+        assert!(config.contains("[type_map]"), "no type_map for {lang}");
+        assert!(config.contains("string ="), "no string type for {lang}");
+        assert!(config.contains("int ="), "no int type for {lang}");
+    }
+}
+
+#[test]
+fn init_user_preset_from_global_file() {
+    let dir = TempDir::new().unwrap();
+
+    // Create a fake home dir with ~/.jujo/languages.toml.
+    let fake_home = TempDir::new().unwrap();
+    let jujo_home = fake_home.path().join(".jujo");
+    std::fs::create_dir_all(&jujo_home).unwrap();
+    std::fs::write(
+        jujo_home.join("languages.toml"),
+        r#"[zig]
+comment_prefix = "//"
+[zig.type_map]
+string = "[]const u8"
+text = "[]const u8"
+int = "i64"
+bool = "bool"
+float = "f64"
+decimal = "f128"
+uuid = "[]const u8"
+date = "i64"
+datetime = "i64"
+json = "std.json.Value"
+"#,
+    )
+    .unwrap();
+
+    jujo_cmd(&dir)
+        .env("HOME", fake_home.path())
+        .args(["init", "--lang", "zig"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("zig"));
+
+    let config = std::fs::read_to_string(dir.path().join(".jujo/config.toml")).unwrap();
+    assert!(config.contains(r#"string = "[]const u8""#));
+    assert!(config.contains(r#"int = "i64""#));
+
+    // languages.toml should include both built-in and user-defined.
+    let langs = std::fs::read_to_string(dir.path().join(".jujo/languages.toml")).unwrap();
+    assert!(langs.contains("[zig]"));
+    assert!(langs.contains("[rust]"));
 }
 
 #[test]
@@ -776,7 +908,14 @@ fn full_agent_protocol() {
 
     // Phase 3: Preview.
     let preview_out = jujo_cmd(&dir)
-        .args(["generate", gen_name, "--var", "module_name=test", "--dry-run", "--json"])
+        .args([
+            "generate",
+            gen_name,
+            "--var",
+            "module_name=test",
+            "--dry-run",
+            "--json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -877,7 +1016,14 @@ fn ai_markers_in_dry_run() {
     seed_ai_marker_generator(&dir);
 
     let output = jujo_cmd(&dir)
-        .args(["generate", "service", "--var", "name=order", "--dry-run", "--json"])
+        .args([
+            "generate",
+            "service",
+            "--var",
+            "name=order",
+            "--dry-run",
+            "--json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -905,13 +1051,27 @@ fn template_add_and_remove() {
 
     // Add it.
     jujo_cmd(&dir)
-        .args(["template", "add", "imported", "--from", src.to_str().unwrap()])
+        .args([
+            "template",
+            "add",
+            "imported",
+            "--from",
+            src.to_str().unwrap(),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Added template"));
 
-    assert!(dir.path().join(".jujo/templates/imported/generator.toml").exists());
-    assert!(dir.path().join(".jujo/templates/imported/hello.tera").exists());
+    assert!(
+        dir.path()
+            .join(".jujo/templates/imported/generator.toml")
+            .exists()
+    );
+    assert!(
+        dir.path()
+            .join(".jujo/templates/imported/hello.tera")
+            .exists()
+    );
 
     // Shows up in list.
     jujo_cmd(&dir)
@@ -938,10 +1098,20 @@ fn template_add_already_exists() {
 
     let src = dir.path().join("src-gen");
     std::fs::create_dir_all(&src).unwrap();
-    std::fs::write(src.join("generator.toml"), "[generator]\nname = \"x\"\ndescription = \"x\"\n").unwrap();
+    std::fs::write(
+        src.join("generator.toml"),
+        "[generator]\nname = \"x\"\ndescription = \"x\"\n",
+    )
+    .unwrap();
 
     jujo_cmd(&dir)
-        .args(["template", "add", "existing", "--from", src.to_str().unwrap()])
+        .args([
+            "template",
+            "add",
+            "existing",
+            "--from",
+            src.to_str().unwrap(),
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("already exists"));
