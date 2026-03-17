@@ -16,3 +16,8 @@ Thumbs.db
 
 # Filament database (local state)
 .fl/
+
+
+# Added by cargo
+
+/target
