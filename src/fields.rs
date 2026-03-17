@@ -45,7 +45,7 @@ pub fn parse_field(spec: &str, type_map: &BTreeMap<String, String>) -> Result<Fi
     let mapped_type = type_map.get(abstract_type).ok_or_else(|| {
         anyhow::anyhow!(
             "type \"{abstract_type}\" has no mapping in config.toml [type_map]. \
-             Add: {abstract_type} = \"<language type>\""
+             add: {abstract_type} = \"<language type>\""
         )
     })?;
 

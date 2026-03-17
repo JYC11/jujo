@@ -90,4 +90,35 @@ mod tests {
         assert_eq!(config.comment_prefix, "<!--");
         assert_eq!(config.comment_suffix, "-->");
     }
+
+    #[test]
+    fn load_config_with_hooks() {
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path().join(".jujo")).unwrap();
+        std::fs::write(
+            dir.path().join(".jujo/config.toml"),
+            "comment_prefix = \"//\"\n\n[hooks]\npost_generate = \"rustfmt {file}\"\n\n[type_map]\nstring = \"String\"\n",
+        )
+        .unwrap();
+
+        let config = load_config(dir.path()).unwrap();
+        assert_eq!(
+            config.hooks.post_generate.as_deref(),
+            Some("rustfmt {file}")
+        );
+    }
+
+    #[test]
+    fn load_config_no_hooks_defaults_to_none() {
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path().join(".jujo")).unwrap();
+        std::fs::write(
+            dir.path().join(".jujo/config.toml"),
+            "comment_prefix = \"//\"\n\n[type_map]\nstring = \"String\"\n",
+        )
+        .unwrap();
+
+        let config = load_config(dir.path()).unwrap();
+        assert!(config.hooks.post_generate.is_none());
+    }
 }

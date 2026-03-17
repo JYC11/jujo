@@ -1,4 +1,4 @@
-use heck::{ToKebabCase, ToLowerCamelCase, ToPascalCase, ToSnakeCase, ToUpperCamelCase};
+use heck::{ToKebabCase, ToLowerCamelCase, ToPascalCase, ToSnakeCase};
 use pluralizer::pluralize;
 use std::collections::HashMap;
 use tera::{Result, Tera, Value};

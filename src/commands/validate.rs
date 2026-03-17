@@ -1,4 +1,3 @@
-use crate::commands::list;
 use crate::generator::{self, Action};
 use crate::render;
 use anyhow::Result;

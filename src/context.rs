@@ -267,4 +267,54 @@ mod tests {
         let err = build_context(&def, &vars, &empty_config()).unwrap_err();
         assert!(err.to_string().contains("no mapping in config.toml"));
     }
+
+    #[test]
+    fn build_context_bool_input() {
+        let def = make_def(vec![InputDef {
+            name: "active".into(),
+            r#type: InputType::Bool,
+            description: String::new(),
+            required: true,
+            default: None,
+        }]);
+        let vars = BTreeMap::from([("active".into(), vec!["true".into()])]);
+        let ctx = build_context(&def, &vars, &empty_config()).unwrap();
+        assert_eq!(ctx.get("active").unwrap(), true);
+
+        let vars_false = BTreeMap::from([("active".into(), vec!["false".into()])]);
+        let ctx2 = build_context(&def, &vars_false, &empty_config()).unwrap();
+        assert_eq!(ctx2.get("active").unwrap(), false);
+    }
+
+    #[test]
+    fn build_context_int_input() {
+        let def = make_def(vec![InputDef {
+            name: "count".into(),
+            r#type: InputType::Int,
+            description: String::new(),
+            required: true,
+            default: None,
+        }]);
+        let vars = BTreeMap::from([("count".into(), vec!["42".into()])]);
+        let ctx = build_context(&def, &vars, &empty_config()).unwrap();
+        assert_eq!(ctx.get("count").unwrap(), 42);
+    }
+
+    #[test]
+    fn build_context_string_array_input() {
+        let def = make_def(vec![InputDef {
+            name: "tags".into(),
+            r#type: InputType::StringArray,
+            description: String::new(),
+            required: true,
+            default: None,
+        }]);
+        // Comma-separated.
+        let vars = BTreeMap::from([("tags".into(), vec!["alpha,beta,gamma".into()])]);
+        let ctx = build_context(&def, &vars, &empty_config()).unwrap();
+        let tags = ctx.get("tags").unwrap().as_array().unwrap();
+        assert_eq!(tags.len(), 3);
+        assert_eq!(tags[0], "alpha");
+        assert_eq!(tags[2], "gamma");
+    }
 }

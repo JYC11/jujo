@@ -1,13 +1,19 @@
 use anyhow::{bail, Result};
 use std::path::Path;
 
-/// Bundled language presets: (name, comment_prefix, comment_suffix, type_map_toml).
-const LANGUAGES: &[(&str, &str, &str, &str)] = &[
-    (
-        "rust",
-        "//",
-        "",
-        r#"string = "String"
+struct LanguagePreset {
+    name: &'static str,
+    comment_prefix: &'static str,
+    comment_suffix: &'static str,
+    type_map_toml: &'static str,
+}
+
+const LANGUAGES: &[LanguagePreset] = &[
+    LanguagePreset {
+        name: "rust",
+        comment_prefix: "//",
+        comment_suffix: "",
+        type_map_toml: r#"string = "String"
 text = "String"
 int = "i64"
 bool = "bool"
@@ -17,12 +23,12 @@ uuid = "String"
 date = "chrono::NaiveDate"
 datetime = "chrono::DateTime<Utc>"
 json = "serde_json::Value""#,
-    ),
-    (
-        "go",
-        "//",
-        "",
-        r#"string = "string"
+    },
+    LanguagePreset {
+        name: "go",
+        comment_prefix: "//",
+        comment_suffix: "",
+        type_map_toml: r#"string = "string"
 text = "string"
 int = "int64"
 bool = "bool"
@@ -32,12 +38,12 @@ uuid = "string"
 date = "time.Time"
 datetime = "time.Time"
 json = "json.RawMessage""#,
-    ),
-    (
-        "python",
-        "#",
-        "",
-        r#"string = "str"
+    },
+    LanguagePreset {
+        name: "python",
+        comment_prefix: "#",
+        comment_suffix: "",
+        type_map_toml: r#"string = "str"
 text = "str"
 int = "int"
 bool = "bool"
@@ -47,12 +53,12 @@ uuid = "str"
 date = "date"
 datetime = "datetime"
 json = "dict""#,
-    ),
-    (
-        "typescript",
-        "//",
-        "",
-        r#"string = "string"
+    },
+    LanguagePreset {
+        name: "typescript",
+        comment_prefix: "//",
+        comment_suffix: "",
+        type_map_toml: r#"string = "string"
 text = "string"
 int = "number"
 bool = "boolean"
@@ -62,12 +68,12 @@ uuid = "string"
 date = "Date"
 datetime = "Date"
 json = "Record<string, unknown>""#,
-    ),
-    (
-        "java",
-        "//",
-        "",
-        r#"string = "String"
+    },
+    LanguagePreset {
+        name: "java",
+        comment_prefix: "//",
+        comment_suffix: "",
+        type_map_toml: r#"string = "String"
 text = "String"
 int = "Long"
 bool = "Boolean"
@@ -77,15 +83,15 @@ uuid = "UUID"
 date = "LocalDate"
 datetime = "Instant"
 json = "JsonNode""#,
-    ),
+    },
 ];
 
 fn language_names() -> Vec<&'static str> {
-    LANGUAGES.iter().map(|(name, _, _, _)| *name).collect()
+    LANGUAGES.iter().map(|l| l.name).collect()
 }
 
-fn find_language(name: &str) -> Option<&'static (&'static str, &'static str, &'static str, &'static str)> {
-    LANGUAGES.iter().find(|(n, _, _, _)| *n == name)
+fn find_language(name: &str) -> Option<&'static LanguagePreset> {
+    LANGUAGES.iter().find(|l| l.name == name)
 }
 
 /// Run `jujo init`, creating .jujo/ with config and example generator.
@@ -108,7 +114,6 @@ pub fn run(lang: Option<&str>) -> Result<()> {
             l.to_string()
         }
         None => {
-            // Interactive selection.
             let options = language_names();
             inquire::Select::new("Select language:", options.clone())
                 .prompt()
@@ -116,19 +121,17 @@ pub fn run(lang: Option<&str>) -> Result<()> {
         }
     };
 
-    let (_, prefix, suffix, type_map) = find_language(&lang_name).unwrap();
+    let preset = find_language(&lang_name).unwrap();
 
-    // Create directory structure.
     let templates_dir = jujo_dir.join("templates/example");
     std::fs::create_dir_all(&templates_dir)?;
 
-    // Write config.toml.
     let config_content = format!(
-        "comment_prefix = \"{prefix}\"\ncomment_suffix = \"{suffix}\"\n\n[type_map]\n{type_map}\n"
+        "comment_prefix = \"{}\"\ncomment_suffix = \"{}\"\n\n[type_map]\n{}\n",
+        preset.comment_prefix, preset.comment_suffix, preset.type_map_toml
     );
     std::fs::write(jujo_dir.join("config.toml"), config_content)?;
 
-    // Write example generator.
     write_example_generator(&templates_dir)?;
 
     println!("Initialized .jujo/ with {lang_name} type map.");

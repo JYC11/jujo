@@ -946,3 +946,53 @@ fn template_add_already_exists() {
         .failure()
         .stderr(predicate::str::contains("already exists"));
 }
+
+// --- Post-generate hook tests ---
+
+#[test]
+fn hook_runs_on_created_files() {
+    let dir = TempDir::new().unwrap();
+    seed_jujo(&dir);
+
+    // Config with a hook that creates a .formatted marker file.
+    write_config(
+        &dir,
+        "comment_prefix = \"//\"\ncomment_suffix = \"\"\n\n[hooks]\npost_generate = \"touch {file}.formatted\"\n\n[type_map]\nstring = \"String\"\n",
+    );
+
+    jujo_cmd(&dir)
+        .args(["generate", "example", "--var", "module_name=orders"])
+        .assert()
+        .success();
+
+    // The hook should have created .formatted marker files.
+    assert!(
+        dir.path().join("src/orders/mod.rs.formatted").exists(),
+        "hook did not run on mod.rs"
+    );
+    assert!(
+        dir.path().join("src/orders/routes.rs.formatted").exists(),
+        "hook did not run on routes.rs"
+    );
+}
+
+#[test]
+fn hook_failure_does_not_crash() {
+    let dir = TempDir::new().unwrap();
+    seed_jujo(&dir);
+
+    // Hook that always fails.
+    write_config(
+        &dir,
+        "comment_prefix = \"//\"\ncomment_suffix = \"\"\n\n[hooks]\npost_generate = \"false\"\n\n[type_map]\nstring = \"String\"\n",
+    );
+
+    // Generate should still succeed even though hook fails.
+    jujo_cmd(&dir)
+        .args(["generate", "example", "--var", "module_name=orders"])
+        .assert()
+        .success();
+
+    // Files should still be created.
+    assert!(dir.path().join("src/orders/mod.rs").exists());
+}

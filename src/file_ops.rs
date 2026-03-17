@@ -21,6 +21,7 @@ pub struct InjectedContent {
 #[derive(Debug, Clone, Copy)]
 pub enum ConflictMode {
     Error,
+    #[allow(dead_code)] // Used in tests; available if users need force-inject in the future.
     Force,
     Skip,
 }
