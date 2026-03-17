@@ -5,6 +5,7 @@ use tempfile::TempDir;
 fn jujo_cmd(dir: &TempDir) -> Command {
     let mut cmd = Command::cargo_bin("jujo").unwrap();
     cmd.current_dir(dir.path());
+    cmd.env("NO_COLOR", "1");
     cmd
 }
 
@@ -363,4 +364,185 @@ output = "entity.rs"
         .assert()
         .failure()
         .stderr(predicate::str::contains("no mapping in config.toml"));
+}
+
+// --- Phase 3: Injection + Dry-Run + JSON tests ---
+
+fn seed_inject_generator(dir: &TempDir) {
+    write_config(
+        dir,
+        "comment_prefix = \"//\"\ncomment_suffix = \"\"\n\n[type_map]\nstring = \"String\"\n",
+    );
+
+    let gen_dir = dir.path().join(".jujo/templates/module");
+    std::fs::create_dir_all(&gen_dir).unwrap();
+
+    std::fs::write(
+        gen_dir.join("generator.toml"),
+        r#"
+[generator]
+name = "module"
+description = "Module with injection"
+
+[[inputs]]
+name = "module_name"
+type = "string"
+required = true
+
+[[actions]]
+type = "create"
+template = "mod.tera"
+output = "src/{{ module_name }}/mod.rs"
+
+[[actions]]
+type = "inject"
+target = "src/main.rs"
+marker = "modules"
+content = "mod {{ module_name }};"
+
+[[actions]]
+type = "inject"
+target = "src/main.rs"
+marker = "routes"
+content = ".nest(\"/{{ module_name }}\", {{ module_name }}::router())"
+"#,
+    )
+    .unwrap();
+
+    std::fs::write(gen_dir.join("mod.tera"), "pub mod routes;\n").unwrap();
+
+    // Create the target file with markers.
+    std::fs::create_dir_all(dir.path().join("src")).unwrap();
+    std::fs::write(
+        dir.path().join("src/main.rs"),
+        "// </jujo:modules>\n\nfn router() -> Router {\n    Router::new()\n// </jujo:routes>\n}\n",
+    )
+    .unwrap();
+}
+
+#[test]
+fn generate_with_inject() {
+    let dir = TempDir::new().unwrap();
+    seed_inject_generator(&dir);
+
+    jujo_cmd(&dir)
+        .args(["generate", "module", "--var", "module_name=orders"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("create"))
+        .stdout(predicate::str::contains("inject"));
+
+    let main = std::fs::read_to_string(dir.path().join("src/main.rs")).unwrap();
+    assert!(main.contains("mod orders;\n// </jujo:modules>"));
+    assert!(main.contains(".nest(\"/orders\", orders::router())\n// </jujo:routes>"));
+}
+
+#[test]
+fn inject_conflict_default_error() {
+    let dir = TempDir::new().unwrap();
+    seed_inject_generator(&dir);
+
+    // First run succeeds.
+    jujo_cmd(&dir)
+        .args(["generate", "module", "--var", "module_name=orders"])
+        .assert()
+        .success();
+
+    // Second run: --force allows file overwrite but injection still conflicts.
+    jujo_cmd(&dir)
+        .args(["generate", "module", "--var", "module_name=orders", "--force"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("content already present"));
+}
+
+#[test]
+fn inject_conflict_skip_existing() {
+    let dir = TempDir::new().unwrap();
+    seed_inject_generator(&dir);
+
+    jujo_cmd(&dir)
+        .args(["generate", "module", "--var", "module_name=orders"])
+        .assert()
+        .success();
+
+    // Second run with --skip-existing + --force (force for file, skip for inject).
+    jujo_cmd(&dir)
+        .args([
+            "generate", "module", "--var", "module_name=orders",
+            "--force", "--skip-existing",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("skip"));
+
+    // Content not duplicated.
+    let main = std::fs::read_to_string(dir.path().join("src/main.rs")).unwrap();
+    assert_eq!(main.matches("mod orders;").count(), 1);
+}
+
+#[test]
+fn dry_run_no_files_written() {
+    let dir = TempDir::new().unwrap();
+    seed_inject_generator(&dir);
+
+    jujo_cmd(&dir)
+        .args(["generate", "module", "--var", "module_name=orders", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("create"))
+        .stdout(predicate::str::contains("inject"));
+
+    // No files created.
+    assert!(!dir.path().join("src/orders/mod.rs").exists());
+    // main.rs unchanged.
+    let main = std::fs::read_to_string(dir.path().join("src/main.rs")).unwrap();
+    assert!(!main.contains("mod orders;"));
+    // No manifest written.
+    assert!(!dir.path().join(".jujo/last-generate.json").exists());
+}
+
+#[test]
+fn json_output_valid() {
+    let dir = TempDir::new().unwrap();
+    seed_inject_generator(&dir);
+
+    let output = jujo_cmd(&dir)
+        .args(["generate", "module", "--var", "module_name=orders", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(json["generator"], "module");
+    assert_eq!(json["created"][0]["path"], "src/orders/mod.rs");
+    assert_eq!(json["injected"][0]["marker"], "modules");
+    assert_eq!(json["injected"][1]["marker"], "routes");
+}
+
+#[test]
+fn dry_run_json_output() {
+    let dir = TempDir::new().unwrap();
+    seed_inject_generator(&dir);
+
+    let output = jujo_cmd(&dir)
+        .args([
+            "generate", "module", "--var", "module_name=orders",
+            "--dry-run", "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(json["generator"], "module");
+    assert!(json["created"].as_array().unwrap().len() > 0);
+    assert!(json["injected"].as_array().unwrap().len() > 0);
+
+    // No files written.
+    assert!(!dir.path().join("src/orders/mod.rs").exists());
 }

@@ -10,6 +10,7 @@ mod render;
 
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
+use owo_colors::OwoColorize;
 use std::collections::BTreeMap;
 
 #[derive(Parser)]
@@ -28,9 +29,18 @@ enum Commands {
         /// Input variables as key=value pairs
         #[arg(long = "var", value_name = "KEY=VALUE")]
         vars: Vec<String>,
-        /// Overwrite existing files
+        /// Overwrite existing files and inject despite conflicts
         #[arg(long)]
         force: bool,
+        /// Skip injection when content already present
+        #[arg(long)]
+        skip_existing: bool,
+        /// Preview what would happen without writing files
+        #[arg(long)]
+        dry_run: bool,
+        /// Output as JSON instead of human-readable text
+        #[arg(long)]
+        json: bool,
     },
     /// List available generators
     List {
@@ -59,14 +69,36 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
     if let Err(e) = run(cli) {
-        eprintln!("error: {e:#}");
+        eprintln!("{} {e:#}", label("error:", LabelColor::Red));
         std::process::exit(1);
+    }
+}
+
+enum LabelColor { Green, Yellow, Cyan, Blue, Red }
+
+fn label(text: &str, color: LabelColor) -> String {
+    if std::env::var_os("NO_COLOR").is_some() {
+        return text.to_string();
+    }
+    match color {
+        LabelColor::Green => format!("{}", text.green().bold()),
+        LabelColor::Yellow => format!("{}", text.yellow().bold()),
+        LabelColor::Cyan => format!("{}", text.cyan().bold()),
+        LabelColor::Blue => format!("{}", text.blue().bold()),
+        LabelColor::Red => format!("{}", text.red().bold()),
     }
 }
 
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
-        Commands::Generate { name, vars, force } => cmd_generate(&name, &vars, force),
+        Commands::Generate {
+            name,
+            vars,
+            force,
+            skip_existing,
+            dry_run,
+            json,
+        } => cmd_generate(&name, &vars, force, skip_existing, dry_run, json),
         Commands::List { .. } => bail!("not yet implemented: list"),
         Commands::Describe { .. } => bail!("not yet implemented: describe"),
         Commands::Validate => bail!("not yet implemented: validate"),
@@ -74,7 +106,14 @@ fn run(cli: Cli) -> Result<()> {
     }
 }
 
-fn cmd_generate(name: &str, vars: &[String], force: bool) -> Result<()> {
+fn cmd_generate(
+    name: &str,
+    vars: &[String],
+    force: bool,
+    skip_existing: bool,
+    dry_run: bool,
+    json_output: bool,
+) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let root = discovery::find_jujo_root(&cwd)?;
     let gen_dir = discovery::generator_dir(&root, name)?;
@@ -85,29 +124,104 @@ fn cmd_generate(name: &str, vars: &[String], force: bool) -> Result<()> {
     let ctx = context::build_context(&def, &var_map, &project_config)?;
     let tera = render::create_tera(&gen_dir)?;
 
+    // --force applies to file creation (overwrite). Injection conflict is separate:
+    // --skip-existing silently skips, otherwise error on conflict.
+    // --force only forces injection if --skip-existing is not set.
+    let conflict_mode = if skip_existing {
+        file_ops::ConflictMode::Skip
+    } else {
+        file_ops::ConflictMode::Error
+    };
+
     let mut created_files = Vec::new();
+    let mut injected_contents = Vec::new();
 
     for action in &def.actions {
         match action {
             generator::Action::Create { template, output } => {
                 let rendered_output = render::render_expression(&tera, output, &ctx)?;
                 let rendered_content = render::render_template(&tera, template, &ctx)?;
-                let result = file_ops::create_file(
-                    &root,
-                    &rendered_output,
-                    &rendered_content,
-                    template,
-                    force,
-                )?;
-                println!("  create {}", result.path);
-                created_files.push(manifest::ManifestCreatedFile {
-                    path: result.path,
-                    template: result.template,
-                });
+
+                if dry_run {
+                    if !json_output {
+                        println!("  {} {}", label("create", LabelColor::Green), rendered_output);
+                    }
+                    created_files.push(manifest::ManifestCreatedFile {
+                        path: rendered_output,
+                        template: template.clone(),
+                    });
+                } else {
+                    let result = file_ops::create_file(
+                        &root,
+                        &rendered_output,
+                        &rendered_content,
+                        template,
+                        force,
+                    )?;
+                    if !json_output {
+                        println!("  {} {}", label("create", LabelColor::Green), result.path);
+                    }
+                    created_files.push(manifest::ManifestCreatedFile {
+                        path: result.path,
+                        template: result.template,
+                    });
+                }
             }
-            generator::Action::Inject { .. } => {
-                // Phase 3: injection not yet implemented.
-                eprintln!("  skip   inject actions not yet implemented");
+            generator::Action::Inject {
+                target,
+                marker,
+                content,
+            } => {
+                let rendered_content = render::render_expression(&tera, content, &ctx)?;
+                let rendered_target = render::render_expression(&tera, target, &ctx)?;
+
+                if dry_run {
+                    if !json_output {
+                        println!(
+                            "  {} {} (marker: {})",
+                            label("inject", LabelColor::Yellow),
+                            rendered_target,
+                            marker
+                        );
+                    }
+                    injected_contents.push(manifest::ManifestInjectedContent {
+                        path: rendered_target,
+                        marker: marker.clone(),
+                        content: rendered_content,
+                    });
+                } else {
+                    let result = file_ops::inject_before_marker(
+                        &root,
+                        &rendered_target,
+                        marker,
+                        &rendered_content,
+                        &project_config.comment_prefix,
+                        &project_config.comment_suffix,
+                        conflict_mode,
+                    )?;
+                    if !json_output {
+                        if result.skipped {
+                            println!(
+                                "  {} {} (marker: {}, already present)",
+                                label("skip", LabelColor::Cyan),
+                                result.path,
+                                result.marker
+                            );
+                        } else {
+                            println!(
+                                "  {} {} (marker: {})",
+                                label("inject", LabelColor::Yellow),
+                                result.path,
+                                result.marker
+                            );
+                        }
+                    }
+                    injected_contents.push(manifest::ManifestInjectedContent {
+                        path: result.path,
+                        marker: result.marker,
+                        content: result.content,
+                    });
+                }
             }
         }
     }
@@ -119,10 +233,8 @@ fn cmd_generate(name: &str, vars: &[String], force: bool) -> Result<()> {
             if values.len() == 1 {
                 (k, serde_json::Value::String(values.into_iter().next().unwrap()))
             } else {
-                let arr: Vec<serde_json::Value> = values
-                    .into_iter()
-                    .map(serde_json::Value::String)
-                    .collect();
+                let arr: Vec<serde_json::Value> =
+                    values.into_iter().map(serde_json::Value::String).collect();
                 (k, serde_json::Value::Array(arr))
             }
         })
@@ -133,13 +245,24 @@ fn cmd_generate(name: &str, vars: &[String], force: bool) -> Result<()> {
         timestamp: chrono::Utc::now().to_rfc3339(),
         inputs,
         created: created_files,
-        injected: vec![],
+        injected: injected_contents,
         customize: vec![],
     };
 
-    let manifest_path = discovery::manifest_path(&root);
-    manifest::write_manifest(&manifest_path, &result)?;
-    println!("\n  manifest {}", manifest_path.display());
+    if json_output {
+        let json = serde_json::to_string_pretty(&result)?;
+        println!("{json}");
+    } else if !dry_run {
+        let manifest_path = discovery::manifest_path(&root);
+        manifest::write_manifest(&manifest_path, &result)?;
+        println!("\n  {} {}", label("manifest", LabelColor::Blue), manifest_path.display());
+    }
+
+    // Write manifest even in non-JSON mode (but not in dry-run).
+    if !dry_run && json_output {
+        let manifest_path = discovery::manifest_path(&root);
+        manifest::write_manifest(&manifest_path, &result)?;
+    }
 
     Ok(())
 }
