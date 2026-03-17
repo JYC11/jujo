@@ -1,0 +1,18 @@
+# Build
+/target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# QA results (local, not committed)
+.qa/
+
+# Filament database (local state)
+.fl/
