@@ -7,6 +7,7 @@ mod file_ops;
 mod filters;
 mod generator;
 mod manifest;
+mod markers;
 mod render;
 
 use anyhow::{bail, Result};
@@ -65,6 +66,37 @@ enum Commands {
         #[arg(long)]
         lang: Option<String>,
     },
+    /// Manage template sets
+    Template {
+        #[command(subcommand)]
+        action: TemplateCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum TemplateCommands {
+    /// Add a template set from a local path
+    Add {
+        /// Template name
+        name: String,
+        /// Source directory path
+        #[arg(long)]
+        from: String,
+        /// Overwrite if exists
+        #[arg(long)]
+        force: bool,
+    },
+    /// Remove a template set
+    Remove {
+        /// Template name
+        name: String,
+    },
+    /// List template sets (alias for `jujo list`)
+    List {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() {
@@ -118,6 +150,21 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Init { lang } => {
             commands::init::run(lang.as_deref())
         }
+        Commands::Template { action } => {
+            let cwd = std::env::current_dir()?;
+            let root = discovery::find_jujo_root(&cwd)?;
+            match action {
+                TemplateCommands::Add { name, from, force } => {
+                    commands::template::add(&root, &name, &from, force)
+                }
+                TemplateCommands::Remove { name } => {
+                    commands::template::remove(&root, &name)
+                }
+                TemplateCommands::List { json } => {
+                    commands::list::run(&root, json)
+                }
+            }
+        }
     }
 }
 
@@ -150,12 +197,18 @@ fn cmd_generate(
 
     let mut created_files = Vec::new();
     let mut injected_contents = Vec::new();
+    let mut customize_markers = Vec::new();
 
     for action in &def.actions {
         match action {
             generator::Action::Create { template, output } => {
                 let rendered_output = render::render_expression(&tera, output, &ctx)?;
                 let rendered_content = render::render_template(&tera, template, &ctx)?;
+
+                // Extract AI customization markers from rendered content.
+                customize_markers.extend(
+                    markers::extract_ai_markers(&rendered_output, &rendered_content),
+                );
 
                 if dry_run {
                     if !json_output {
@@ -261,7 +314,7 @@ fn cmd_generate(
         inputs,
         created: created_files,
         injected: injected_contents,
-        customize: vec![],
+        customize: customize_markers,
     };
 
     if json_output {

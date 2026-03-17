@@ -796,3 +796,153 @@ fn full_agent_protocol() {
     let result: serde_json::Value = serde_json::from_slice(&exec_out).unwrap();
     assert!(result["created"].as_array().unwrap().len() > 0);
 }
+
+// --- Phase 5: AI markers + template management ---
+
+fn seed_ai_marker_generator(dir: &TempDir) {
+    write_config(
+        dir,
+        "comment_prefix = \"//\"\ncomment_suffix = \"\"\n\n[type_map]\nstring = \"String\"\n",
+    );
+
+    let gen_dir = dir.path().join(".jujo/templates/service");
+    std::fs::create_dir_all(&gen_dir).unwrap();
+
+    std::fs::write(
+        gen_dir.join("generator.toml"),
+        r#"
+[generator]
+name = "service"
+description = "Service with AI markers"
+
+[[inputs]]
+name = "name"
+type = "string"
+required = true
+
+[[actions]]
+type = "create"
+template = "service.tera"
+output = "src/{{ name }}_service.rs"
+"#,
+    )
+    .unwrap();
+
+    std::fs::write(
+        gen_dir.join("service.tera"),
+        r#"pub fn create(req: CreateReq) -> Result<Response> {
+    // <ai:customize hint="Add validation logic">
+    let validated = req;
+    // </ai:customize>
+    save(validated)
+}
+
+pub fn list() -> Vec<Response> {
+    // <ai:customize hint="Add pagination and filtering">
+    todo!()
+    // </ai:customize>
+}
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn ai_markers_in_manifest() {
+    let dir = TempDir::new().unwrap();
+    seed_ai_marker_generator(&dir);
+
+    let output = jujo_cmd(&dir)
+        .args(["generate", "service", "--var", "name=order", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    let customize = json["customize"].as_array().unwrap();
+    assert_eq!(customize.len(), 2);
+    assert_eq!(customize[0]["path"], "src/order_service.rs");
+    assert_eq!(customize[0]["hint"], "Add validation logic");
+    assert_eq!(customize[1]["hint"], "Add pagination and filtering");
+    // Line numbers should be positive integers.
+    assert!(customize[0]["line"].as_u64().unwrap() > 0);
+    assert!(customize[1]["line"].as_u64().unwrap() > customize[0]["line"].as_u64().unwrap());
+}
+
+#[test]
+fn ai_markers_in_dry_run() {
+    let dir = TempDir::new().unwrap();
+    seed_ai_marker_generator(&dir);
+
+    let output = jujo_cmd(&dir)
+        .args(["generate", "service", "--var", "name=order", "--dry-run", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert!(json["customize"].as_array().unwrap().len() > 0);
+}
+
+#[test]
+fn template_add_and_remove() {
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".jujo/templates")).unwrap();
+
+    // Create a source template.
+    let src = dir.path().join("my-source");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(
+        src.join("generator.toml"),
+        "[generator]\nname = \"imported\"\ndescription = \"An imported generator\"\n",
+    )
+    .unwrap();
+    std::fs::write(src.join("hello.tera"), "Hello!").unwrap();
+
+    // Add it.
+    jujo_cmd(&dir)
+        .args(["template", "add", "imported", "--from", src.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Added template"));
+
+    assert!(dir.path().join(".jujo/templates/imported/generator.toml").exists());
+    assert!(dir.path().join(".jujo/templates/imported/hello.tera").exists());
+
+    // Shows up in list.
+    jujo_cmd(&dir)
+        .args(["template", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("imported"));
+
+    // Remove it.
+    jujo_cmd(&dir)
+        .args(["template", "remove", "imported"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Removed template"));
+
+    assert!(!dir.path().join(".jujo/templates/imported").exists());
+}
+
+#[test]
+fn template_add_already_exists() {
+    let dir = TempDir::new().unwrap();
+    let dest = dir.path().join(".jujo/templates/existing");
+    std::fs::create_dir_all(&dest).unwrap();
+
+    let src = dir.path().join("src-gen");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("generator.toml"), "[generator]\nname = \"x\"\ndescription = \"x\"\n").unwrap();
+
+    jujo_cmd(&dir)
+        .args(["template", "add", "existing", "--from", src.to_str().unwrap()])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("already exists"));
+}
