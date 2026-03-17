@@ -1,7 +1,12 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
 
 const JUJO_DIR: &str = ".jujo";
+
+/// Return the global jujo directory (~/.jujo/).
+pub fn global_jujo_dir() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(JUJO_DIR))
+}
 
 /// Walk up from `start` to find the nearest `.jujo/` directory.
 pub fn find_jujo_root(start: &Path) -> Result<PathBuf> {
@@ -21,15 +26,25 @@ pub fn find_jujo_root(start: &Path) -> Result<PathBuf> {
 }
 
 /// Resolve the template directory for a named generator.
+/// Checks project-local first, then global ~/.jujo/templates/.
 pub fn generator_dir(jujo_root: &Path, name: &str) -> Result<PathBuf> {
-    let dir = jujo_root.join(JUJO_DIR).join("templates").join(name);
-    if !dir.is_dir() {
-        bail!(
-            "unknown generator \"{name}\". No directory at {}",
-            dir.display()
-        );
+    // Project-local takes priority.
+    let local = jujo_root.join(JUJO_DIR).join("templates").join(name);
+    if local.is_dir() {
+        return Ok(local);
     }
-    Ok(dir)
+
+    // Fall back to global.
+    if let Some(global) = global_jujo_dir() {
+        let global_dir = global.join("templates").join(name);
+        if global_dir.is_dir() {
+            return Ok(global_dir);
+        }
+    }
+
+    bail!(
+        "unknown generator \"{name}\". Not found in .jujo/templates/ or ~/.jujo/templates/"
+    );
 }
 
 /// Path to the manifest file.

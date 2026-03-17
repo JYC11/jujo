@@ -11,6 +11,14 @@ pub struct ProjectConfig {
     pub comment_prefix: String,
     #[serde(default)]
     pub comment_suffix: String,
+    #[serde(default)]
+    pub hooks: Hooks,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct Hooks {
+    /// Command to run on each created file. `{file}` is replaced with the file path.
+    pub post_generate: Option<String>,
 }
 
 fn default_comment_prefix() -> String {
@@ -26,6 +34,7 @@ pub fn load_config(jujo_root: &Path) -> Result<ProjectConfig> {
             type_map: BTreeMap::new(),
             comment_prefix: default_comment_prefix(),
             comment_suffix: String::new(),
+            hooks: Hooks::default(),
         });
     }
     let content = std::fs::read_to_string(&config_path)

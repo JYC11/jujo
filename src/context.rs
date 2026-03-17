@@ -127,6 +127,7 @@ pub fn build_context(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config;
     use crate::generator::{GeneratorMeta, InputDef};
 
     fn make_def(inputs: Vec<InputDef>) -> GeneratorDef {
@@ -165,6 +166,7 @@ mod tests {
             type_map: BTreeMap::new(),
             comment_prefix: "//".into(),
             comment_suffix: String::new(),
+            hooks: config::Hooks::default(),
         }
     }
 
@@ -178,6 +180,7 @@ mod tests {
             ]),
             comment_prefix: "//".into(),
             comment_suffix: String::new(),
+            hooks: config::Hooks::default(),
         }
     }
 

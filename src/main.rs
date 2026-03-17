@@ -109,6 +109,22 @@ fn main() {
 
 enum LabelColor { Green, Yellow, Cyan, Blue, Red }
 
+fn run_hook(hook_template: &str, file_path: &std::path::Path) {
+    let cmd = hook_template.replace("{file}", &file_path.display().to_string());
+    let result = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(&cmd)
+        .output();
+    match result {
+        Ok(output) if !output.status.success() => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            eprintln!("  hook warning: {cmd} failed: {stderr}");
+        }
+        Err(e) => eprintln!("  hook warning: failed to run \"{cmd}\": {e}"),
+        _ => {}
+    }
+}
+
 fn label(text: &str, color: LabelColor) -> String {
     if std::env::var_os("NO_COLOR").is_some() {
         return text.to_string();
@@ -226,6 +242,11 @@ fn cmd_generate(
                         template,
                         force,
                     )?;
+                    // Run post-generate hook if configured.
+                    if let Some(hook) = &project_config.hooks.post_generate {
+                        let file_path = root.join(&result.path);
+                        run_hook(hook, &file_path);
+                    }
                     if !json_output {
                         println!("  {} {}", label("create", LabelColor::Green), result.path);
                     }

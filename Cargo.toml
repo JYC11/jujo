@@ -6,6 +6,7 @@ description = "Agent-first code generation framework"
 
 [dependencies]
 anyhow = "1"
+dirs = "6"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 clap = { version = "4", features = ["derive"] }
 heck = "0.5"
