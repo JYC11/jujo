@@ -1,5 +1,7 @@
+mod config;
 mod context;
 mod discovery;
+mod fields;
 mod file_ops;
 mod filters;
 mod generator;
@@ -76,10 +78,11 @@ fn cmd_generate(name: &str, vars: &[String], force: bool) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let root = discovery::find_jujo_root(&cwd)?;
     let gen_dir = discovery::generator_dir(&root, name)?;
+    let project_config = config::load_config(&root)?;
 
     let def = generator::load_generator(&gen_dir)?;
     let var_map = context::parse_vars(vars)?;
-    let ctx = context::build_context(&def, &var_map)?;
+    let ctx = context::build_context(&def, &var_map, &project_config)?;
     let tera = render::create_tera(&gen_dir)?;
 
     let mut created_files = Vec::new();
@@ -112,7 +115,17 @@ fn cmd_generate(name: &str, vars: &[String], force: bool) -> Result<()> {
     // Build inputs map for the manifest.
     let inputs: BTreeMap<String, serde_json::Value> = var_map
         .into_iter()
-        .map(|(k, v)| (k, serde_json::Value::String(v)))
+        .map(|(k, values)| {
+            if values.len() == 1 {
+                (k, serde_json::Value::String(values.into_iter().next().unwrap()))
+            } else {
+                let arr: Vec<serde_json::Value> = values
+                    .into_iter()
+                    .map(serde_json::Value::String)
+                    .collect();
+                (k, serde_json::Value::Array(arr))
+            }
+        })
         .collect();
 
     let result = manifest::GenerationResult {

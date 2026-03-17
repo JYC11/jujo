@@ -8,6 +8,11 @@ fn jujo_cmd(dir: &TempDir) -> Command {
     cmd
 }
 
+fn write_config(dir: &TempDir, content: &str) {
+    std::fs::create_dir_all(dir.path().join(".jujo")).unwrap();
+    std::fs::write(dir.path().join(".jujo/config.toml"), content).unwrap();
+}
+
 fn seed_jujo(dir: &TempDir) {
     let gen_dir = dir.path().join(".jujo/templates/example");
     std::fs::create_dir_all(&gen_dir).unwrap();
@@ -198,4 +203,164 @@ fn generate_from_subdirectory() {
 
     // Files created relative to the jujo root, not the cwd.
     assert!(dir.path().join("src/widgets/mod.rs").exists());
+}
+
+// --- Phase 2: Field parsing + type map tests ---
+
+fn seed_entity_generator(dir: &TempDir) {
+    write_config(
+        dir,
+        "comment_prefix = \"//\"\ncomment_suffix = \"\"\n\n[type_map]\nstring = \"String\"\nint = \"i64\"\nbool = \"bool\"\ndecimal = \"rust_decimal::Decimal\"\n",
+    );
+
+    let gen_dir = dir.path().join(".jujo/templates/entity");
+    std::fs::create_dir_all(&gen_dir).unwrap();
+
+    std::fs::write(
+        gen_dir.join("generator.toml"),
+        r#"
+[generator]
+name = "entity"
+description = "Generate an entity struct from fields"
+
+[[inputs]]
+name = "entity_name"
+type = "string"
+required = true
+
+[[inputs]]
+name = "fields"
+type = "field[]"
+description = "Fields as name:type"
+required = true
+
+[[actions]]
+type = "create"
+template = "entity.tera"
+output = "src/{{ entity_name }}.rs"
+"#,
+    )
+    .unwrap();
+
+    std::fs::write(
+        gen_dir.join("entity.tera"),
+        r#"{% set EntityName = entity_name | pascal_case %}
+pub struct {{ EntityName }} {
+    pub id: String,
+{% for field in fields %}
+{% if field.nullable %}    pub {{ field.name }}: Option<{{ field.mapped_type }}>,
+{% else %}    pub {{ field.name }}: {{ field.mapped_type }},
+{% endif %}
+{% endfor %}
+}
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn generate_with_fields_comma_separated() {
+    let dir = TempDir::new().unwrap();
+    seed_entity_generator(&dir);
+
+    jujo_cmd(&dir)
+        .args([
+            "generate",
+            "entity",
+            "--var",
+            "entity_name=order",
+            "--var",
+            "fields=title:string,price:decimal?,active:bool",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("create src/order.rs"));
+
+    let content = std::fs::read_to_string(dir.path().join("src/order.rs")).unwrap();
+    assert!(content.contains("pub struct Order"), "EntityName not rendered");
+    assert!(content.contains("pub title: String"), "string field missing");
+    assert!(
+        content.contains("Option<rust_decimal::Decimal>"),
+        "nullable decimal not rendered"
+    );
+    assert!(content.contains("pub active: bool"), "bool field missing");
+}
+
+#[test]
+fn generate_with_fields_repeated_var() {
+    let dir = TempDir::new().unwrap();
+    seed_entity_generator(&dir);
+
+    jujo_cmd(&dir)
+        .args([
+            "generate",
+            "entity",
+            "--var",
+            "entity_name=product",
+            "--var",
+            "fields=name:string",
+            "--var",
+            "fields=price:decimal?",
+        ])
+        .assert()
+        .success();
+
+    let content = std::fs::read_to_string(dir.path().join("src/product.rs")).unwrap();
+    assert!(content.contains("pub struct Product"));
+    assert!(content.contains("pub name: String"));
+    assert!(content.contains("Option<rust_decimal::Decimal>"));
+}
+
+#[test]
+fn generate_fields_unknown_type() {
+    let dir = TempDir::new().unwrap();
+    seed_entity_generator(&dir);
+
+    jujo_cmd(&dir)
+        .args([
+            "generate",
+            "entity",
+            "--var",
+            "entity_name=order",
+            "--var",
+            "fields=amount:money",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown type \"money\""))
+        .stderr(predicate::str::contains("Valid types:"));
+}
+
+#[test]
+fn generate_fields_no_type_map() {
+    let dir = TempDir::new().unwrap();
+    // Create generator but no config.toml (empty type map).
+    let gen_dir = dir.path().join(".jujo/templates/entity");
+    std::fs::create_dir_all(&gen_dir).unwrap();
+    std::fs::write(
+        gen_dir.join("generator.toml"),
+        r#"
+[generator]
+name = "entity"
+description = "test"
+
+[[inputs]]
+name = "fields"
+type = "field[]"
+required = true
+
+[[actions]]
+type = "create"
+template = "entity.tera"
+output = "entity.rs"
+"#,
+    )
+    .unwrap();
+    std::fs::write(gen_dir.join("entity.tera"), "placeholder").unwrap();
+
+    jujo_cmd(&dir)
+        .args(["generate", "entity", "--var", "fields=name:string"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no mapping in config.toml"));
 }
