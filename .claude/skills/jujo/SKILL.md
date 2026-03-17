@@ -10,18 +10,21 @@ description: >
 
 # Jujo Agent Protocol
 
-Jujo is a code generation CLI. You drive it through a four-phase protocol, then customize
-the generated code at marked locations.
+Jujo is a language-agnostic code generation CLI. Users define template sets (TOML + Tera),
+jujo stamps out files deterministically, and writes a structured manifest for agents to
+customize the output. It works with any language or framework.
 
-## Phase 1: Discover — what generators exist?
+## Four-Phase Agent Protocol
+
+### Phase 1: Discover
 
 ```bash
 jujo list --json
 ```
 
-Returns an array of `{ name, description }`. Pick the right generator for the task.
+Returns `[{ "name": "...", "description": "..." }, ...]`. Pick the right generator.
 
-## Phase 2: Schema — what inputs does it need?
+### Phase 2: Schema
 
 ```bash
 jujo describe <generator> --json
@@ -30,34 +33,45 @@ jujo describe <generator> --json
 Returns `{ name, description, inputs: [...], actions: [...] }`. Each input has:
 - `name` — the variable name
 - `type` — `string`, `string[]`, `bool`, `int`, or `field[]`
-- `required` — whether it must be provided
-- `default` — value used if not provided
+- `required` / `default`
 
-For `field[]` inputs, provide fields as `name:type` pairs. Types: `string`, `text`, `int`,
-`bool`, `float`, `decimal`, `uuid`, `date`, `datetime`, `json`. Append `?` for nullable.
-
-## Phase 3: Preview — what would it do?
+### Phase 3: Preview
 
 ```bash
 jujo generate <generator> --var key=value --dry-run --json
 ```
 
-Returns the full `GenerationResult` without writing any files. Review before executing.
+Returns the full result without writing files. Review before executing.
 
-## Phase 4: Execute
+### Phase 4: Execute
 
 ```bash
 jujo generate <generator> --var key=value --json
 ```
 
-Writes files, injects into existing files, writes manifest. Returns `GenerationResult`.
+Writes files, injects into existing files, writes manifest.
 
-### Flags
+### Phase 5: Customize
+
+Read `.jujo/last-generate.json`. The `customize` array lists exactly where to add
+domain-specific logic:
+
+```json
+{
+  "customize": [
+    { "path": "src/orders/service.rs", "line": 15, "hint": "Add validation logic" }
+  ]
+}
+```
+
+Visit each location, implement what the hint describes, following project conventions.
+
+## CLI Flags
 
 | Flag | Effect |
 |------|--------|
 | `--var key=value` | Set an input variable. Repeat for multiple. |
-| `--json` | Output structured JSON instead of colored text. |
+| `--json` | Structured JSON output (for agents). |
 | `--dry-run` | Preview only, write nothing. |
 | `--force` | Overwrite existing files. |
 | `--skip-existing` | Skip injection if content already present. |
@@ -66,94 +80,67 @@ Writes files, injects into existing files, writes manifest. Returns `GenerationR
 
 For `field[]` inputs, both formats work:
 ```bash
-# Comma-separated
---var "fields=title:string,price:decimal?,active:bool"
-
-# Repeated
---var fields=title:string --var fields=price:decimal? --var fields=active:bool
+--var "fields=title:string,price:decimal?,active:bool"   # comma-separated
+--var fields=title:string --var fields=price:decimal?     # repeated
 ```
 
-## Phase 5: Customize — read the manifest
-
-After generation, read `.jujo/last-generate.json`:
-
-```json
-{
-  "generator": "module",
-  "created": [{ "path": "src/orders/service.rs", "template": "service.tera" }],
-  "injected": [{ "path": "src/main.rs", "marker": "modules", "content": "mod orders;" }],
-  "customize": [
-    { "path": "src/orders/service.rs", "line": 15, "hint": "Add validation logic" },
-    { "path": "src/orders/routes.rs", "line": 20, "hint": "Add custom routes" }
-  ]
-}
-```
-
-The `customize` array tells you exactly where to add domain-specific logic. Visit each
-location and implement what the hint describes, following project conventions.
+Abstract types: `string`, `text`, `int`, `bool`, `float`, `decimal`, `uuid`, `date`,
+`datetime`, `json`. Append `?` for nullable. Types map to language-specific types via
+`config.toml` `[type_map]`.
 
 ## Writing Tera Templates
 
-Templates use Jinja2-like syntax. Key features:
+Templates use Jinja2-like syntax:
 
 ```
 {{ variable }}                              — insert value
-{{ name | pascal_case }}                    — filter: PascalCase
-{{ name | snake_case }}                     — filter: snake_case
-{{ name | singularize }}                    — filter: orders → order
-{{ name | pluralize }}                      — filter: order → orders
-{{ name | camel_case }}                     — filter: camelCase
-{{ name | kebab_case }}                     — filter: kebab-case
-{{ name | upper_case }}                     — filter: UPPER
-{% for field in fields %}...{% endfor %}   — loop over array
+{{ name | pascal_case }}                    — PascalCase
+{{ name | snake_case }}                     — snake_case
+{{ name | camel_case }}                     — camelCase
+{{ name | kebab_case }}                     — kebab-case
+{{ name | upper_case }}                     — UPPER_CASE
+{{ name | singularize }}                    — orders → order
+{{ name | pluralize }}                      — order → orders
+{% for item in list %}...{% endfor %}      — loop
 {% if condition %}...{% endif %}           — conditional
 {% set var = expr %}                       — set variable
 ```
 
-### Whitespace control (IMPORTANT)
+### Whitespace control (CRITICAL)
 
-Tera block tags (`{% %}`) render as blank lines in the output. Use `{%-` and `-%}` to
-trim surrounding whitespace. This is critical for clean output.
+Tera block tags (`{% %}`) render as blank lines. Use `{%-` / `-%}` to trim whitespace.
+
+| Syntax | Effect |
+|--------|--------|
+| `{%-` | Trims whitespace/newline BEFORE the tag |
+| `-%}` | Trims whitespace/newline AFTER the tag |
 
 **Rules:**
-- `{%-` trims whitespace BEFORE the tag (eats the preceding newline)
-- `-%}` trims whitespace AFTER the tag (eats the following newline)
-- Use BOTH (`{%- ... -%}`) on control-flow-only lines (for/endfor/if/endif/set)
-- Do NOT use `-%}` when the line also has output content after the tag
+- Use `{%-` on control-flow lines (for/endfor/if/endif/else/set) to prevent blank lines
+- Use `{%- ... -%}` on lines that produce NO output (set, endfor, endif)
+- Do NOT use `-%}` when the tag is followed by output content on the same line
 
-**Examples:**
-
+**Pattern — loop over items:**
 ```
-{# BAD — leaves blank lines between fields #}
-{% for field in fields %}
-    pub {{ field.name }}: {{ field.mapped_type }},
-{% endfor %}
-
-{# GOOD — no blank lines #}
 {%- for field in fields %}
-    pub {{ field.name }}: {{ field.mapped_type }},
+    {{ field.name }}: {{ field.mapped_type }},
 {%- endfor %}
 ```
 
+**Pattern — conditional inclusion:**
 ```
-{# BAD — blank lines around conditional #}
-{% if tenant_scoped %}
-    pub tenant_id: String,
-{% endif %}
-
-{# GOOD — tight output #}
-{%- if tenant_scoped %}
-    pub tenant_id: String,
+{%- if feature_enabled %}
+    extra_config: true,
 {%- endif %}
 ```
 
-**Pattern for struct fields with nullable check:**
+**Pattern — nullable check:**
 ```
 {%- for field in fields %}
 {%- if field.nullable %}
-    pub {{ field.name }}: Option<{{ field.mapped_type }}>,
+    {{ field.name }}?: {{ field.mapped_type }};
 {%- else %}
-    pub {{ field.name }}: {{ field.mapped_type }},
+    {{ field.name }}: {{ field.mapped_type }};
 {%- endif %}
 {%- endfor %}
 ```
@@ -161,48 +148,66 @@ trim surrounding whitespace. This is critical for clean output.
 ### Shared variables via `_vars.tera`
 
 Create `_vars.tera` in the generator directory. Its content is automatically prepended
-to all other templates. Use `{%- -%}` to avoid blank lines at the top of output:
+to all other templates. Use `{%- -%}` to avoid blank lines:
 
 ```
 {%- set entity_name = module_name | singularize -%}
 {%- set EntityName = entity_name | pascal_case -%}
+{%- set table_name = module_name -%}
 ```
 
 ### AI customization markers
 
-Add these in templates where domain-specific logic should go:
+Add markers where domain-specific logic should go. Use the project's comment style:
 
 ```
-// <ai:customize hint="Add validation rules for Order creation">
-let validated = req;
+// <ai:customize hint="Add validation logic here">
+placeholder_code();
 // </ai:customize>
 ```
 
-These are extracted into the manifest's `customize` array after generation.
+Works with any comment syntax — `//`, `#`, `<!-- -->`. These are extracted into the
+manifest's `customize` array with file path, line number, and hint.
+
+### Injection markers
+
+Templates can inject content into existing files. The target file needs a closing marker:
+
+```
+// </jujo:modules>
+```
+
+The generator's inject action inserts content before this marker. Comment style is
+configured in `config.toml` (`comment_prefix` / `comment_suffix`).
 
 ## Config: `.jujo/config.toml`
 
 ```toml
-comment_prefix = "//"
-comment_suffix = ""
+comment_prefix = "//"      # or "#" for Python, "<!--" for HTML
+comment_suffix = ""         # or "-->" for HTML
 
 [hooks]
-post_generate = "rustfmt {file}"    # run formatter on each created file
+post_generate = "fmt {file}"   # run a formatter on each created file
 
 [type_map]
-string = "String"
-int = "i64"
+string = "String"    # language-specific type mappings
+int = "i64"          # used by field[] inputs
 bool = "bool"
-decimal = "rust_decimal::Decimal"
+decimal = "Decimal"
 ```
 
-The `[type_map]` maps abstract types to language-specific types. Used by `field[]` inputs.
+The `[type_map]` maps jujo's abstract types to your language's types. `jujo init --lang`
+populates this for common languages (Rust, Go, Python, TypeScript, Java).
+
+The `[hooks]` section runs commands on each generated file. `{file}` is replaced with
+the absolute file path. Hook failures warn but don't stop generation.
 
 ## Other Commands
 
 ```bash
-jujo init --lang rust          # initialize .jujo/ with language type map
-jujo validate                  # check all generators parse correctly
-jujo template add <name> --from <path>   # install a template set
-jujo template remove <name>    # remove a template set
+jujo init [--lang <lang>]              # create .jujo/ with type map for a language
+jujo validate                          # check all generators and templates
+jujo template add <name> --from <path> # install a template set from local path
+jujo template remove <name>            # remove a template set
+jujo template list [--json]            # list installed template sets
 ```
