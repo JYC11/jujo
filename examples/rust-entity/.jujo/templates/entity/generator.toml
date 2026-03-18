@@ -1,0 +1,26 @@
+[generator]
+name = "entity"
+description = "Generate a Rust entity struct with fields"
+
+[[inputs]]
+name = "entity_name"
+type = "string"
+description = "Entity name (snake_case)"
+required = true
+
+[[inputs]]
+name = "fields"
+type = "field[]"
+description = "Fields as name:type pairs (e.g. title:string,price:decimal?)"
+required = true
+
+[[actions]]
+type = "create"
+template = "entity.tera"
+output = "src/entities/{{ entity_name }}.rs"
+
+[[actions]]
+type = "inject"
+target = "src/entities/mod.rs"
+marker = "modules"
+content = "pub mod {{ entity_name }};"

@@ -1,0 +1,27 @@
+{%- set ModelName = model_name | pascal_case -%}
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Optional
+
+# <ai:customize hint="Add imports for {{ ModelName }} field types">
+# </ai:customize>
+
+
+@dataclass
+class {{ ModelName }}:
+    """Represents a {{ model_name }} entity."""
+
+    id: str
+{%- for field in fields %}
+{%- if field.nullable %}
+    {{ field.name }}: Optional[{{ field.mapped_type }}] = None
+{%- else %}
+    {{ field.name }}: {{ field.mapped_type }} = None
+{%- endif %}
+{%- endfor %}
+
+    # <ai:customize hint="Add domain methods for {{ ModelName }}">
+    def validate(self) -> bool:
+        raise NotImplementedError
+    # </ai:customize>

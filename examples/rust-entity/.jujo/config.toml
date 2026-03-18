@@ -1,0 +1,14 @@
+comment_prefix = "//"
+comment_suffix = ""
+
+[type_map]
+bool = "bool"
+date = "chrono::NaiveDate"
+datetime = "chrono::DateTime<Utc>"
+decimal = "rust_decimal::Decimal"
+float = "f64"
+int = "i64"
+json = "serde_json::Value"
+string = "String"
+text = "String"
+uuid = "String"

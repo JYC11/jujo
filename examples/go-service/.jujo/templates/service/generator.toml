@@ -1,0 +1,20 @@
+[generator]
+name = "service"
+description = "Generate a Go service with struct and CRUD methods"
+
+[[inputs]]
+name = "service_name"
+type = "string"
+description = "Service name (snake_case)"
+required = true
+
+[[inputs]]
+name = "fields"
+type = "field[]"
+description = "Fields as name:type pairs"
+required = true
+
+[[actions]]
+type = "create"
+template = "service.tera"
+output = "services/{{ service_name }}_service.go"

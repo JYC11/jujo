@@ -1,0 +1,14 @@
+comment_prefix = "#"
+comment_suffix = ""
+
+[type_map]
+bool = "bool"
+date = "date"
+datetime = "datetime"
+decimal = "Decimal"
+float = "float"
+int = "int"
+json = "dict"
+string = "str"
+text = "str"
+uuid = "str"

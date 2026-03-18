@@ -1,0 +1,26 @@
+[generator]
+name = "page"
+description = "Generate an HTML page and inject navigation link"
+
+[[inputs]]
+name = "page_name"
+type = "string"
+description = "Page name (snake_case)"
+required = true
+
+[[inputs]]
+name = "title"
+type = "string"
+description = "Page title"
+required = true
+
+[[actions]]
+type = "create"
+template = "page.tera"
+output = "pages/{{ page_name }}.html"
+
+[[actions]]
+type = "inject"
+target = "index.html"
+marker = "nav-links"
+content = "    <a href=\"pages/{{ page_name }}.html\">{{ title }}</a>"

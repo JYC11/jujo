@@ -1,0 +1,22 @@
+{%- set EntityName = entity_name | pascal_case -%}
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct {{ EntityName }} {
+    pub id: String,
+{%- for field in fields %}
+{%- if field.nullable %}
+    pub {{ field.name }}: Option<{{ field.mapped_type }}>,
+{%- else %}
+    pub {{ field.name }}: {{ field.mapped_type }},
+{%- endif %}
+{%- endfor %}
+}
+
+impl {{ EntityName }} {
+    // <ai:customize hint="Add constructor and domain methods for {{ EntityName }}">
+    pub fn new(id: String) -> Self {
+        todo!()
+    }
+    // </ai:customize>
+}

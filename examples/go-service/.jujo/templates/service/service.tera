@@ -1,0 +1,30 @@
+{%- set ServiceName = service_name | pascal_case -%}
+package services
+
+// {{ ServiceName }}Service handles {{ service_name }} operations.
+type {{ ServiceName }}Service struct {
+	db *sql.DB
+}
+
+// {{ ServiceName }} represents a {{ service_name }} entity.
+type {{ ServiceName }} struct {
+	ID string `json:"id"`
+{%- for field in fields %}
+{%- if field.nullable %}
+	{{ field.name | pascal_case }} *{{ field.mapped_type }} `json:"{{ field.name }}"`
+{%- else %}
+	{{ field.name | pascal_case }} {{ field.mapped_type }} `json:"{{ field.name }}"`
+{%- endif %}
+{%- endfor %}
+}
+
+// New{{ ServiceName }}Service creates a new service instance.
+func New{{ ServiceName }}Service(db *sql.DB) *{{ ServiceName }}Service {
+	return &{{ ServiceName }}Service{db: db}
+}
+
+// <ai:customize hint="Add CRUD methods for {{ ServiceName }}">
+func (s *{{ ServiceName }}Service) Create(input {{ ServiceName }}) error {
+	return nil
+}
+// </ai:customize>

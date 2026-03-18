@@ -1,0 +1,20 @@
+[generator]
+name = "model"
+description = "Generate a Python dataclass model"
+
+[[inputs]]
+name = "model_name"
+type = "string"
+description = "Model name (snake_case)"
+required = true
+
+[[inputs]]
+name = "fields"
+type = "field[]"
+description = "Fields as name:type pairs"
+required = true
+
+[[actions]]
+type = "create"
+template = "model.tera"
+output = "models/{{ model_name }}.py"

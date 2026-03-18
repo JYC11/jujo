@@ -676,7 +676,9 @@ fn init_creates_languages_toml() {
     assert!(content.contains("[go]"));
     assert!(content.contains("[python]"));
     assert!(content.contains("[typescript]"));
+    assert!(content.contains("[css]"));
     assert!(content.contains("[csharp]"));
+    assert!(content.contains("[html]"));
     assert!(content.contains("[kotlin]"));
     assert!(content.contains("[ruby]"));
     assert!(content.contains("[swift]"));
@@ -687,7 +689,9 @@ fn init_creates_languages_toml() {
 #[test]
 fn init_new_languages() {
     // Test each new language produces a valid config.
-    for lang in ["csharp", "kotlin", "ruby", "php", "swift", "elixir"] {
+    for lang in [
+        "css", "csharp", "html", "kotlin", "ruby", "php", "swift", "elixir",
+    ] {
         let dir = TempDir::new().unwrap();
         jujo_cmd(&dir)
             .args(["init", "--lang", lang])
@@ -1165,4 +1169,124 @@ fn hook_failure_does_not_crash() {
 
     // Files should still be created.
     assert!(dir.path().join("src/orders/mod.rs").exists());
+}
+
+// --- HTML/CSS comment style injection tests ---
+
+#[test]
+fn html_comment_style_injection() {
+    let dir = TempDir::new().unwrap();
+    write_config(
+        &dir,
+        "comment_prefix = \"<!--\"\ncomment_suffix = \"-->\"\n\n[type_map]\nstring = \"string\"\n",
+    );
+
+    let gen_dir = dir.path().join(".jujo/templates/component");
+    std::fs::create_dir_all(&gen_dir).unwrap();
+
+    std::fs::write(
+        gen_dir.join("generator.toml"),
+        r#"
+[generator]
+name = "component"
+description = "HTML component"
+
+[[inputs]]
+name = "name"
+type = "string"
+required = true
+
+[[actions]]
+type = "create"
+template = "component.tera"
+output = "components/{{ name }}.html"
+
+[[actions]]
+type = "inject"
+target = "index.html"
+marker = "components"
+content = "<link rel=\"import\" href=\"components/{{ name }}.html\">"
+"#,
+    )
+    .unwrap();
+
+    std::fs::write(
+        gen_dir.join("component.tera"),
+        "<div class=\"{{ name }}\">{{ name | pascal_case }}</div>\n",
+    )
+    .unwrap();
+
+    // Create target file with HTML-style marker.
+    std::fs::write(
+        dir.path().join("index.html"),
+        "<head>\n<!-- </jujo:components> -->\n</head>\n",
+    )
+    .unwrap();
+
+    jujo_cmd(&dir)
+        .args(["generate", "component", "--var", "name=sidebar"])
+        .assert()
+        .success();
+
+    let index = std::fs::read_to_string(dir.path().join("index.html")).unwrap();
+    assert!(
+        index.contains(
+            "<link rel=\"import\" href=\"components/sidebar.html\">\n<!-- </jujo:components> -->"
+        ),
+        "HTML marker injection failed: {index}"
+    );
+
+    let component = std::fs::read_to_string(dir.path().join("components/sidebar.html")).unwrap();
+    assert!(component.contains("Sidebar"));
+}
+
+#[test]
+fn css_comment_style_injection() {
+    let dir = TempDir::new().unwrap();
+    write_config(
+        &dir,
+        "comment_prefix = \"/*\"\ncomment_suffix = \"*/\"\n\n[type_map]\nstring = \"string\"\n",
+    );
+
+    let gen_dir = dir.path().join(".jujo/templates/theme");
+    std::fs::create_dir_all(&gen_dir).unwrap();
+
+    std::fs::write(
+        gen_dir.join("generator.toml"),
+        r#"
+[generator]
+name = "theme"
+description = "CSS theme variables"
+
+[[inputs]]
+name = "name"
+type = "string"
+required = true
+
+[[actions]]
+type = "inject"
+target = "styles.css"
+marker = "themes"
+content = "@import 'themes/{{ name }}.css';"
+"#,
+    )
+    .unwrap();
+
+    // Create target file with CSS-style marker.
+    std::fs::write(
+        dir.path().join("styles.css"),
+        "/* Base styles */\n/* </jujo:themes> */\n",
+    )
+    .unwrap();
+
+    jujo_cmd(&dir)
+        .args(["generate", "theme", "--var", "name=dark"])
+        .assert()
+        .success();
+
+    let css = std::fs::read_to_string(dir.path().join("styles.css")).unwrap();
+    assert!(
+        css.contains("@import 'themes/dark.css';\n/* </jujo:themes> */"),
+        "CSS marker injection failed: {css}"
+    );
 }

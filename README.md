@@ -123,8 +123,10 @@ Install the skills by copying `.claude/skills/jujo/` and `.claude/skills/pattern
 | Language | Comment Style | Example Types |
 |----------|--------------|---------------|
 | C# | `//` | `string`, `long`, `bool`, `decimal`, `Guid`, `DateTimeOffset` |
+| CSS | `/* */` | `string`, `number`, `boolean` (all map to CSS value types) |
 | Elixir | `#` | `String.t()`, `integer()`, `boolean()`, `Decimal.t()`, `DateTime.t()` |
 | Go | `//` | `string`, `int64`, `bool`, `decimal.Decimal`, `time.Time` |
+| HTML | `<!-- -->` | `string`, `number`, `boolean` (all map to HTML attribute types) |
 | Java | `//` | `String`, `Long`, `Boolean`, `BigDecimal`, `Instant` |
 | Kotlin | `//` | `String`, `Long`, `Boolean`, `BigDecimal`, `Instant` |
 | PHP | `//` | `string`, `int`, `bool`, `float`, `DateTimeImmutable` |

@@ -1,0 +1,20 @@
+[generator]
+name = "component"
+description = "Generate a TypeScript interface and service class"
+
+[[inputs]]
+name = "component_name"
+type = "string"
+description = "Component name (snake_case)"
+required = true
+
+[[inputs]]
+name = "fields"
+type = "field[]"
+description = "Fields as name:type pairs"
+required = true
+
+[[actions]]
+type = "create"
+template = "component.tera"
+output = "src/components/{{ component_name | pascal_case }}.ts"

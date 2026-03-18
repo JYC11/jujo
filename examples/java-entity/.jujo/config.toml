@@ -1,0 +1,14 @@
+comment_prefix = "//"
+comment_suffix = ""
+
+[type_map]
+bool = "Boolean"
+date = "LocalDate"
+datetime = "Instant"
+decimal = "BigDecimal"
+float = "Double"
+int = "Long"
+json = "JsonNode"
+string = "String"
+text = "String"
+uuid = "UUID"

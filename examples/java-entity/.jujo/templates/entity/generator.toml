@@ -1,0 +1,20 @@
+[generator]
+name = "entity"
+description = "Generate a Java entity class with fields"
+
+[[inputs]]
+name = "entity_name"
+type = "string"
+description = "Entity name (snake_case)"
+required = true
+
+[[inputs]]
+name = "fields"
+type = "field[]"
+description = "Fields as name:type pairs"
+required = true
+
+[[actions]]
+type = "create"
+template = "entity.tera"
+output = "src/main/java/entities/{{ entity_name | pascal_case }}.java"

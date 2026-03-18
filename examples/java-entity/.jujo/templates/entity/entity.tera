@@ -1,0 +1,30 @@
+{%- set EntityName = entity_name | pascal_case -%}
+package entities;
+
+import java.util.Objects;
+
+public class {{ EntityName }} {
+
+    private String id;
+{%- for field in fields %}
+    private {{ field.mapped_type }} {{ field.name }};
+{%- endfor %}
+
+    public {{ EntityName }}() {}
+
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+
+{%- for field in fields %}
+
+    public {{ field.mapped_type }} get{{ field.name | pascal_case }}() { return {{ field.name }}; }
+    public void set{{ field.name | pascal_case }}({{ field.mapped_type }} {{ field.name }}) { this.{{ field.name }} = {{ field.name }}; }
+{%- endfor %}
+
+    // <ai:customize hint="Add equals, hashCode, and business methods for {{ EntityName }}">
+    @Override
+    public String toString() {
+        return "{{ EntityName }}{id=" + id + "}";
+    }
+    // </ai:customize>
+}

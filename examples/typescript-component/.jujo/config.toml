@@ -1,0 +1,14 @@
+comment_prefix = "//"
+comment_suffix = ""
+
+[type_map]
+bool = "boolean"
+date = "Date"
+datetime = "Date"
+decimal = "number"
+float = "number"
+int = "number"
+json = "Record<string, unknown>"
+string = "string"
+text = "string"
+uuid = "string"

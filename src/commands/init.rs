@@ -16,6 +16,26 @@ fn builtin_presets() -> BTreeMap<String, LanguagePreset> {
     let mut m = BTreeMap::new();
 
     m.insert(
+        "css".into(),
+        LanguagePreset {
+            comment_prefix: "/*".into(),
+            comment_suffix: "*/".into(),
+            type_map: type_map(&[
+                ("string", "string"),
+                ("text", "string"),
+                ("int", "number"),
+                ("bool", "boolean"),
+                ("float", "number"),
+                ("decimal", "number"),
+                ("uuid", "string"),
+                ("date", "string"),
+                ("datetime", "string"),
+                ("json", "string"),
+            ]),
+        },
+    );
+
+    m.insert(
         "csharp".into(),
         LanguagePreset {
             comment_prefix: "//".into(),
@@ -51,6 +71,26 @@ fn builtin_presets() -> BTreeMap<String, LanguagePreset> {
                 ("date", "Date.t()"),
                 ("datetime", "DateTime.t()"),
                 ("json", "map()"),
+            ]),
+        },
+    );
+
+    m.insert(
+        "html".into(),
+        LanguagePreset {
+            comment_prefix: "<!--".into(),
+            comment_suffix: "-->".into(),
+            type_map: type_map(&[
+                ("string", "string"),
+                ("text", "string"),
+                ("int", "number"),
+                ("bool", "boolean"),
+                ("float", "number"),
+                ("decimal", "number"),
+                ("uuid", "string"),
+                ("date", "string"),
+                ("datetime", "string"),
+                ("json", "string"),
             ]),
         },
     );
@@ -390,9 +430,11 @@ mod tests {
     fn builtin_presets_contain_all_languages() {
         let presets = builtin_presets();
         let expected = [
+            "css",
             "csharp",
             "elixir",
             "go",
+            "html",
             "java",
             "kotlin",
             "php",

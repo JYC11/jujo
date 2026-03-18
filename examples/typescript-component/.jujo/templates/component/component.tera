@@ -1,0 +1,23 @@
+{%- set ComponentName = component_name | pascal_case -%}
+export interface I{{ ComponentName }} {
+  id: string;
+{%- for field in fields %}
+{%- if field.nullable %}
+  {{ field.name }}: {{ field.mapped_type }} | null;
+{%- else %}
+  {{ field.name }}: {{ field.mapped_type }};
+{%- endif %}
+{%- endfor %}
+}
+
+export class {{ ComponentName }}Service {
+  // <ai:customize hint="Add API methods for {{ ComponentName }}">
+  async getAll(): Promise<I{{ ComponentName }}[]> {
+    throw new Error("Not implemented");
+  }
+
+  async getById(id: string): Promise<I{{ ComponentName }}> {
+    throw new Error("Not implemented");
+  }
+  // </ai:customize>
+}
