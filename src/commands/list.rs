@@ -84,11 +84,11 @@ fn scan_templates_dir(
             continue; // Project-local already registered this name.
         }
         let gen_dir = entry.path();
-        if gen_dir.join("generator.toml").exists() {
-            if let Ok(def) = generator::load_generator(&gen_dir) {
-                seen.insert(dir_name.clone());
-                generators.push((dir_name, def));
-            }
+        if gen_dir.join("generator.toml").exists()
+            && let Ok(def) = generator::load_generator(&gen_dir)
+        {
+            seen.insert(dir_name.clone());
+            generators.push((dir_name, def));
         }
     }
 }

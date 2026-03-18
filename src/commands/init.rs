@@ -292,12 +292,11 @@ fn load_presets() -> BTreeMap<String, LanguagePreset> {
 
     if let Some(home) = dirs::home_dir() {
         let global_file = home.join(".jujo").join("languages.toml");
-        if let Ok(contents) = std::fs::read_to_string(&global_file) {
-            if let Ok(user_presets) = toml::from_str::<BTreeMap<String, LanguagePreset>>(&contents)
-            {
-                for (name, preset) in user_presets {
-                    presets.insert(name, preset);
-                }
+        if let Ok(contents) = std::fs::read_to_string(&global_file)
+            && let Ok(user_presets) = toml::from_str::<BTreeMap<String, LanguagePreset>>(&contents)
+        {
+            for (name, preset) in user_presets {
+                presets.insert(name, preset);
             }
         }
     }
@@ -319,7 +318,7 @@ fn presets_to_toml(presets: &BTreeMap<String, LanguagePreset>) -> String {
         if !preset.comment_suffix.is_empty() {
             out.push_str(&format!("comment_suffix = {:?}\n", preset.comment_suffix));
         }
-        out.push_str("\n");
+        out.push('\n');
         out.push_str(&format!("[{name}.type_map]\n"));
         for (k, v) in &preset.type_map {
             out.push_str(&format!("{k} = {v:?}\n"));

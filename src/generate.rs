@@ -4,6 +4,16 @@ use anyhow::Result;
 use owo_colors::OwoColorize;
 use std::collections::BTreeMap;
 
+struct GenerateCtx<'a> {
+    root: &'a std::path::Path,
+    tera: &'a tera::Tera,
+    ctx: &'a tera::Context,
+    config: &'a config::ProjectConfig,
+    conflict_mode: file_ops::ConflictMode,
+    dry_run: bool,
+    json_output: bool,
+}
+
 pub fn run(
     name: &str,
     vars: &[String],
@@ -32,17 +42,28 @@ pub fn run(
     let mut injected_contents = Vec::new();
     let mut customize_markers = Vec::new();
 
+    let gen_ctx = GenerateCtx {
+        root: &root,
+        tera: &tera,
+        ctx: &ctx,
+        config: &project_config,
+        conflict_mode,
+        dry_run,
+        json_output,
+    };
+
     for action in &def.actions {
         match action {
             generator::Action::Create { template, output } => {
-                let rendered_output = render::render_expression(&tera, output, &ctx)?;
-                let rendered_content = render::render_template(&tera, template, &ctx)?;
+                let rendered_output = render::render_expression(gen_ctx.tera, output, gen_ctx.ctx)?;
+                let rendered_content =
+                    render::render_template(gen_ctx.tera, template, gen_ctx.ctx)?;
                 let rel_path = RelativePath::new(&rendered_output)?;
 
                 customize_markers.extend(markers::extract_ai_markers(&rel_path, &rendered_content));
 
-                if dry_run {
-                    if !json_output {
+                if gen_ctx.dry_run {
+                    if !gen_ctx.json_output {
                         println!("  {} {}", label("create", Color::Green), rel_path);
                     }
                     created_files.push(manifest::ManifestCreatedFile {
@@ -51,16 +72,16 @@ pub fn run(
                     });
                 } else {
                     let result = file_ops::create_file(
-                        &root,
+                        gen_ctx.root,
                         &rel_path,
                         &rendered_content,
                         template,
                         force,
                     )?;
-                    if let Some(hook) = &project_config.hooks.post_generate {
-                        hook.run(&root.join(result.path.as_ref()));
+                    if let Some(hook) = &gen_ctx.config.hooks.post_generate {
+                        hook.run(&gen_ctx.root.join(result.path.as_ref()));
                     }
-                    if !json_output {
+                    if !gen_ctx.json_output {
                         println!("  {} {}", label("create", Color::Green), result.path);
                     }
                     created_files.push(manifest::ManifestCreatedFile {
@@ -74,19 +95,7 @@ pub fn run(
                 marker,
                 content,
             } => {
-                handle_inject(
-                    &root,
-                    &tera,
-                    &ctx,
-                    target,
-                    marker,
-                    content,
-                    &project_config,
-                    conflict_mode,
-                    dry_run,
-                    json_output,
-                    &mut injected_contents,
-                )?;
+                handle_inject(&gen_ctx, target, marker, content, &mut injected_contents)?;
             }
         }
     }
@@ -136,24 +145,18 @@ pub fn run(
 }
 
 fn handle_inject(
-    root: &std::path::Path,
-    tera: &tera::Tera,
-    ctx: &tera::Context,
+    gctx: &GenerateCtx,
     target: &str,
     marker: &crate::types::MarkerName,
     content: &str,
-    config: &config::ProjectConfig,
-    conflict_mode: file_ops::ConflictMode,
-    dry_run: bool,
-    json_output: bool,
     injected: &mut Vec<manifest::ManifestInjectedContent>,
 ) -> Result<()> {
-    let rendered_content = render::render_expression(tera, content, ctx)?;
-    let rendered_target = render::render_expression(tera, target, ctx)?;
+    let rendered_content = render::render_expression(gctx.tera, content, gctx.ctx)?;
+    let rendered_target = render::render_expression(gctx.tera, target, gctx.ctx)?;
     let rel_path = RelativePath::new(&rendered_target)?;
 
-    if dry_run {
-        if !json_output {
+    if gctx.dry_run {
+        if !gctx.json_output {
             println!(
                 "  {} {} (marker: {})",
                 label("inject", Color::Yellow),
@@ -170,15 +173,15 @@ fn handle_inject(
     }
 
     let result = file_ops::inject_before_marker(
-        root,
+        gctx.root,
         &rel_path,
         marker,
         &rendered_content,
-        &config.comment_style,
-        conflict_mode,
+        &gctx.config.comment_style,
+        gctx.conflict_mode,
     )?;
 
-    if !json_output {
+    if !gctx.json_output {
         if result.skipped {
             println!(
                 "  {} {} (marker: {}, already present)",
