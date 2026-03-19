@@ -1,8 +1,19 @@
 [package]
 name = "jujo"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 description = "Agent-first code generation framework"
+repository = "https://github.com/JYC11/jujo"
+license = "MIT"
+keywords = ["codegen", "template", "scaffolding", "cli", "agent"]
+categories = ["command-line-utilities", "development-tools", "template-engine"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
 
 [dependencies]
 anyhow = "1"

@@ -16,14 +16,48 @@ LLM agents waste tokens and produce inconsistent code when generating boilerplat
 2. **Generate scaffolding** — `jujo generate module --var name=billing` stamps out consistent, compilable boilerplate
 3. **Agent customizes** — The generation manifest tells the AI exactly what was created and where to add business logic
 
-## Quick Start
-- currently we only have build from source
-- we will add an install with curl option when project is done
-```bash
-# Install
-cargo install jujo
+## Install
 
-# Initialize a project (11 languages supported)
+### Quick install (prebuilt binary)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JYC11/jujo/main/install.sh | sh
+```
+
+Options:
+```bash
+# Custom install directory
+curl -fsSL https://raw.githubusercontent.com/JYC11/jujo/main/install.sh | sh -s -- --to /usr/local/bin
+
+# Specific version
+curl -fsSL https://raw.githubusercontent.com/JYC11/jujo/main/install.sh | sh -s -- --version v1.0.0
+```
+
+### Build from source
+
+Requires the [Rust toolchain](https://rustup.rs/) (stable channel).
+
+```bash
+git clone https://github.com/JYC11/jujo.git
+cd jujo
+cargo build --release
+cp target/release/jujo ~/.local/bin/   # or anywhere on your PATH
+```
+
+### Uninstall
+
+```bash
+# If installed via curl
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/JYC11/jujo/main/uninstall.sh)"
+
+# Or manually
+rm ~/.local/bin/jujo
+```
+
+## Quick Start
+
+```bash
+# Initialize a project (13 languages supported)
 cd my-project
 jujo init --lang rust
 

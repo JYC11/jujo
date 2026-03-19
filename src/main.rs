@@ -16,7 +16,11 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "jujo", about = "Agent-first code generation framework")]
+#[command(
+    name = "jujo",
+    about = "Agent-first code generation framework",
+    version
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
