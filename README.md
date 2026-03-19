@@ -40,18 +40,24 @@ Requires the [Rust toolchain](https://rustup.rs/) (stable channel).
 ```bash
 git clone https://github.com/JYC11/jujo.git
 cd jujo
-cargo build --release
-cp target/release/jujo ~/.local/bin/   # or anywhere on your PATH
+make install                        # builds release + installs to ~/.local/bin
+make install DEST=/usr/local/bin    # custom destination
 ```
 
 ### Uninstall
 
 ```bash
-# If installed via curl
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/JYC11/jujo/main/uninstall.sh)"
+make uninstall                      # removes from ~/.local/bin
+make uninstall DEST=/usr/local/bin  # custom destination
+```
 
-# Or manually
-rm ~/.local/bin/jujo
+### Development
+
+```bash
+make build              # debug build
+make build RELEASE=1    # release build
+make test               # run all tests
+make ci                 # full CI: fmt check + clippy + tests
 ```
 
 ## Quick Start
