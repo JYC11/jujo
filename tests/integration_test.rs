@@ -579,8 +579,8 @@ fn dry_run_json_output() {
 
     let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(json["generator"], "module");
-    assert!(json["created"].as_array().unwrap().len() > 0);
-    assert!(json["injected"].as_array().unwrap().len() > 0);
+    assert!(!json["created"].as_array().unwrap().is_empty());
+    assert!(!json["injected"].as_array().unwrap().is_empty());
 
     // No files written.
     assert!(!dir.path().join("src/orders/mod.rs").exists());
@@ -798,8 +798,8 @@ fn describe_generator_json() {
 
     let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(json["name"], "example");
-    assert!(json["inputs"].as_array().unwrap().len() > 0);
-    assert!(json["actions"].as_array().unwrap().len() > 0);
+    assert!(!json["inputs"].as_array().unwrap().is_empty());
+    assert!(!json["actions"].as_array().unwrap().is_empty());
     assert_eq!(json["inputs"][0]["name"], "module_name");
     assert_eq!(json["inputs"][0]["type"], "string");
 }
@@ -908,7 +908,7 @@ fn full_agent_protocol() {
         .stdout
         .clone();
     let schema: serde_json::Value = serde_json::from_slice(&describe_out).unwrap();
-    assert!(schema["inputs"].as_array().unwrap().len() > 0);
+    assert!(!schema["inputs"].as_array().unwrap().is_empty());
 
     // Phase 3: Preview.
     let preview_out = jujo_cmd(&dir)
@@ -926,7 +926,7 @@ fn full_agent_protocol() {
         .stdout
         .clone();
     let preview: serde_json::Value = serde_json::from_slice(&preview_out).unwrap();
-    assert!(preview["created"].as_array().unwrap().len() > 0);
+    assert!(!preview["created"].as_array().unwrap().is_empty());
 
     // Phase 4: Execute.
     let exec_out = jujo_cmd(&dir)
@@ -937,7 +937,7 @@ fn full_agent_protocol() {
         .stdout
         .clone();
     let result: serde_json::Value = serde_json::from_slice(&exec_out).unwrap();
-    assert!(result["created"].as_array().unwrap().len() > 0);
+    assert!(!result["created"].as_array().unwrap().is_empty());
 }
 
 // --- Phase 5: AI markers + template management ---
@@ -1035,7 +1035,7 @@ fn ai_markers_in_dry_run() {
         .clone();
 
     let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
-    assert!(json["customize"].as_array().unwrap().len() > 0);
+    assert!(!json["customize"].as_array().unwrap().is_empty());
 }
 
 #[test]
